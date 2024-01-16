@@ -12,8 +12,6 @@ from mininet.log import setLogLevel
 from mininet.cli import CLI
 from mininet.clean import cleanup
 
-# from mininet.util import dumpNodeConnections
-
 Dryrun = False
 NodeNum = 3
 Subnet = ipa.ip_network("10.0.0.0/24")
@@ -133,8 +131,11 @@ def setMaxLimit():
 def PerfTest():
     """Create network and run simple performance test"""
     topo = SingleSwitchTopo(n=NodeNum)
-    host = partial(Host, privateDirs=PersistList + TempList)
-    net = Mininet(topo=topo, host=host, link=TCLink)
+    net = Mininet(
+        topo=topo,
+        host=partial(Host, privateDirs=PersistList + TempList),  # type: ignore
+        link=TCLink,
+    )
     net.addController("c1")
 
     nataddr = ipa.ip_address(Subnet[-1])
