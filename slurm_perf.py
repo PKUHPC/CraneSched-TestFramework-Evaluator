@@ -14,7 +14,7 @@ from mininet.clean import cleanup
 
 Dryrun = False
 NodeNum = 3
-Subnet = ipa.ip_network("10.0.0.0/24")
+Subnet = ipa.ip_network("10.0.0.0/16")
 
 HostPath = "/etc/hosts"
 ConfPath = "/etc/slurm/slurm.conf"
@@ -41,9 +41,8 @@ class SingleSwitchTopo(Topo):
 
         for h in range(n):
             name = f"slurmd{h+1}"
-            addr = ipa.ip_address(Subnet[h + 1])
-            host = self.addHost(name, ip=str(addr))
-            Hosts[name] = str(addr)
+            host = self.addHost(name, ip=f"{Subnet[h+1]}/{Subnet.prefixlen}")
+            Hosts[name] = Subnet[h + 1]
             self.addLink(
                 host,
                 switch,
@@ -137,9 +136,7 @@ def PerfTest():
         link=TCLink,
     )
     net.addController("c1")
-
-    nataddr = ipa.ip_address(Subnet[-1])
-    net.addNAT(ip=str(nataddr)).configDefault()
+    net.addNAT(ip=f"{Subnet[-2]}/{Subnet.prefixlen}").configDefault()
 
     WriteHostfile()
 
