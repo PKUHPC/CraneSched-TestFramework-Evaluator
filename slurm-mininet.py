@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import os
+import yaml
 import argparse
 import resource
 import ipaddress as ipa
-import yaml
 from time import sleep
 from functools import partial
 from mininet.topo import Topo
@@ -37,7 +37,7 @@ class NodeConfig:
         self.num = 3
         self.offset = 1
         self.subnet = ipa.IPv4Network("10.0.0.0/8", strict=True)
-        self.addr = ipa.IPv4Network("192.168.0.10/24", strict=False)
+        self.addr = ipa.IPv4Interface("192.168.0.10/24")
 
     def __str__(self) -> str:
         return (
@@ -71,8 +71,8 @@ class ClusterConfig:
                     node = NodeConfig(name)
                     node.num = params["HostNum"]
                     node.offset = params["Offset"]
-                    node.subnet = ipa.IPv4Network(params["Subnet"], strict=True)
-                    node.addr = ipa.IPv4Network(params["NodeAddr"], strict=False)
+                    node.subnet = ipa.IPv4Network(params["Subnet"])
+                    node.addr = ipa.IPv4Interface(params["NodeAddr"])
                 self.nodes[name] = node
         except FileNotFoundError or TypeError or KeyError or ValueError:
             print("Invalid config, fall back to defaults")
@@ -87,12 +87,10 @@ class ClusterConfig:
         self.this.num = args.num if args.num else param.get("HostNum", 3)
         self.this.offset = args.offset if args.offset else param.get("Offset", 1)
         self.this.subnet = ipa.IPv4Network(
-            args.subnet if args.subnet else param.get("Subnet", "10.0.0.0/8"),
-            strict=True,
+            args.subnet if args.subnet else param.get("Subnet", "10.0.0.0/8")
         )
-        self.this.addr = ipa.IPv4Network(
-            args.addr if args.addr else param.get("NodeAddr", "192.168.0.10/24"),
-            strict=False,
+        self.this.addr = ipa.IPv4Interface(
+            args.addr if args.addr else param.get("NodeAddr", "192.168.0.10/24")
         )
         return self.this
 
@@ -101,6 +99,22 @@ class ClusterConfig:
         for n in self.nodes:
             for name, addr in self.nodes[n].hosts(cidr=False):
                 entry.append((name, addr))
+        return entry
+
+    def getRouteEntry(self) -> list[tuple[str, str]]:
+        """
+        Get needed routes for `this` host to reach subnets on other hosts.
+        """
+        entry = []
+        for name, node in self.nodes.items():
+            if name == self.this.name:
+                continue
+            entry.append(
+                (
+                    f"{node.subnet.network_address}/{node.subnet.prefixlen}",
+                    str(node.addr.ip),
+                )
+            )
         return entry
 
 
@@ -151,11 +165,31 @@ def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
             file.write(emark)
 
 
+def writeRoute(entry: list[tuple[str, str]], clean=False):
+    """
+    Check and add required route.
+    """
+    for dest, nexthop in entry:
+        # Clean existing routes
+        ret = os.popen(f"ip route del {dest}").read()
+        if len(ret) and "No such process" not in ret:
+            print(ret)
+        if clean:
+            continue
+        
+        # Write new routes
+        ret = os.popen(f"ip route add {dest} via {nexthop}").read()
+        if len(ret):
+            print(ret)
+
+
 def reset():
     cleanup()
-    writeHostfile(clean=True)
     # Kill all Slurmd
     os.system(r"pkill -SIGINT -e -f '^slurmd\s'")
+    # Reset hosts and routes
+    writeHostfile(clean=True)
+    writeRoute(Cluster.getRouteEntry(), clean=True)
 
 
 def setMaxLimit():
@@ -176,7 +210,7 @@ def setMaxLimit():
         f.write(str(MaxLimit))
 
 
-def Start(config: NodeConfig):
+def Run(config: NodeConfig):
     """Create network and run the simulation"""
     topo = SingleSwitchTopo(config)
     net = Mininet(
@@ -264,16 +298,16 @@ if __name__ == "__main__":
         "--conf",
         type=str,
         default="config.yaml",
-        help="Cluster configuration in YAML format",
+        help="cluster configuration in YAML format",
     )
-    parser.add_argument("-n", "--num", type=int, help="Number of virtual hosts")
+    parser.add_argument("-n", "--num", type=int, help="number of virtual hosts")
     parser.add_argument(
-        "--offset", type=int, help="Name offset of virtual hosts, default=1"
+        "--offset", type=int, help="naming offset of virtual hosts, default=1"
     )
-    parser.add_argument("--subnet", type=str, help="Subnet for virtual hosts")
+    parser.add_argument("--subnet", type=str, help="subnet for virtual hosts")
     parser.add_argument("--slurm-conf", type=str, help="`slurm.conf` for slurmd")
     parser.add_argument(
-        "--addr", type=str, help="Primary IP (CIDR) of this node used in the cluster"
+        "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
     parser.add_argument("--dryrun", action="store_true", help="Do not starting slurmd")
 
@@ -292,6 +326,9 @@ if __name__ == "__main__":
     setLogLevel("info")
     setMaxLimit()
 
-    # Generate hostfile
+    # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())
-    Start(Cluster.this)
+    if len(Cluster.nodes) > 1:
+        writeRoute(Cluster.getRouteEntry())
+
+    Run(Cluster.this)

@@ -1,4 +1,14 @@
+# IDE files
 .vscode
+
+# Cloned
 mininet/
 openflow/
+
+# Utilities
+sync.sh
+sync_*
+nodes.txt
+
+# Slurm output
 *.out

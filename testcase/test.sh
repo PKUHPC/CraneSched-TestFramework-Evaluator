@@ -10,5 +10,5 @@
 echo "Hello world! Current PID $$"
 #for i in {11..14} ; do ssh "cn$i" echo "Pam Test\!" ; done
 #pwd
-sleep 600
+sleep 100
 echo "done"
