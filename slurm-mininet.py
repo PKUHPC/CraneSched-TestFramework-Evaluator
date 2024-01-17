@@ -176,8 +176,8 @@ def setMaxLimit():
         f.write(str(MaxLimit))
 
 
-def Benchmark(config: NodeConfig):
-    """Create network and run benchmark"""
+def Start(config: NodeConfig):
+    """Create network and run the simulation"""
     topo = SingleSwitchTopo(config)
     net = Mininet(
         ipBase=str(config.subnet),
@@ -189,7 +189,7 @@ def Benchmark(config: NodeConfig):
 
     nat = net.addNAT(ip=f"{config.subnet[-2]}/{config.subnet.prefixlen}")
     nat.configDefault()
-    nat.cmd("iptables -t nat -F POSTROUTING")  # Disable MASQURADE as we don't need it
+    nat.cmd("iptables -t nat -F POSTROUTING")  # Disable MASQUERADE as we don't need it
 
     net.start()
 
@@ -258,13 +258,13 @@ def Benchmark(config: NodeConfig):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="SLURM Benchmark on Mininet")
+    parser = argparse.ArgumentParser(description="SLURM in Mininet")
     parser.add_argument(
         "-c",
         "--conf",
         type=str,
-        default="benchmark.yaml",
-        help="Benchmark configuration in YAML format",
+        default="config.yaml",
+        help="Cluster configuration in YAML format",
     )
     parser.add_argument("-n", "--num", type=int, help="Number of virtual hosts")
     parser.add_argument(
@@ -294,4 +294,4 @@ if __name__ == "__main__":
 
     # Generate hostfile
     writeHostfile(Cluster.getHostEntry())
-    Benchmark(Cluster.this)
+    Start(Cluster.this)
