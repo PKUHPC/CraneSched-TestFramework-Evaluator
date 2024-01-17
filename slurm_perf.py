@@ -1,5 +1,5 @@
 import os
-import sys
+import argparse
 import resource
 import ipaddress as ipa
 from time import sleep
@@ -14,6 +14,7 @@ from mininet.clean import cleanup
 
 Dryrun = False
 NodeNum = 3
+Offset = 1  # Default start from 1 !
 Subnet = ipa.ip_network("10.0.0.0/16")
 
 HostPath = "/etc/hosts"
@@ -35,14 +36,14 @@ Hosts = {}
 class SingleSwitchTopo(Topo):
     """Single switch connected to n hosts."""
 
-    def __init__(self, n=2, **opts):
+    def __init__(self, **opts):
         Topo.__init__(self, **opts)
         switch = self.addSwitch("switch1")
 
-        for h in range(n):
-            name = f"slurmd{h+1}"
-            host = self.addHost(name, ip=f"{Subnet[h+1]}/{Subnet.prefixlen}")
-            Hosts[name] = Subnet[h + 1]
+        for h in range(Offset, Offset + NodeNum):
+            name = f"slurmd{h}"
+            host = self.addHost(name, ip=f"{Subnet[h]}/{Subnet.prefixlen}")
+            Hosts[name] = Subnet[h]
             self.addLink(
                 host,
                 switch,
@@ -129,7 +130,7 @@ def setMaxLimit():
 
 def PerfTest():
     """Create network and run simple performance test"""
-    topo = SingleSwitchTopo(n=NodeNum)
+    topo = SingleSwitchTopo()
     net = Mininet(
         topo=topo,
         host=partial(Host, privateDirs=PersistList + TempList),  # type: ignore
@@ -142,7 +143,9 @@ def PerfTest():
 
     net.start()
     print("Testing connectivity")
-    if net.pingAll() > 0:
+    if (
+        net.pingAll() if NodeNum < 10 else net.ping(hosts=[net.hosts[0], net.hosts[-1]])
+    ) > 0:
         print("Network not fully connected, exiting...")
         return
 
@@ -205,15 +208,40 @@ def PerfTest():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        NodeNum = int(sys.argv[1])
-        Subnet = ipa.ip_network(sys.argv[2]) if len(sys.argv) > 2 else Subnet
-        ConfPath = os.path.abspath(sys.argv[3]) if len(sys.argv) > 3 else ConfPath
-        Dryrun = sys.argv[4] if len(sys.argv) > 4 else Dryrun
+    parser = argparse.ArgumentParser(description="SLURM Benchmark on Mininet")
+    parser.add_argument(
+        "-n", type=int, default=NodeNum, help="Number of nodes in the network"
+    )
+    parser.add_argument(
+        "--offset", type=int, default=Offset, help="Node name offset (start number, default=1)"
+    )
+    parser.add_argument(
+        "--subnet", type=str, default=str(Subnet), help="Subnet for the network"
+    )
+    parser.add_argument(
+        "--conf",
+        type=str,
+        default=ConfPath,
+        help="Path to the Slurm configuration file",
+    )
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        help="Enable dry run without starting slurmd",
+    )
+
+    args = parser.parse_args()
+
+    NodeNum = args.n
+    Offset = args.offset
+    Subnet = ipa.ip_network(args.subnet)
+    ConfPath = os.path.abspath(args.conf)
+    Dryrun = args.dryrun
 
     print(f"NodeNum = {NodeNum}")
     print(f"Subnet = {Subnet}")
     print(f"ConfPath = {ConfPath}")
+    print(f"Dryrun = {Dryrun}")
 
     reset()
     setLogLevel("info")
