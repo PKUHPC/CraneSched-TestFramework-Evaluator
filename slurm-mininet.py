@@ -26,7 +26,7 @@ HostName = "slurmd{}"
 PersistList = [("/tmp/output", "/tmp/output")]
 
 # Each host's temporary directory is invisible to others.
-TempList = ["/tmp/slurm"]
+TempList = ["/tmp/slurm", "/tmp/munge"]
 
 
 class NodeConfig:
@@ -176,7 +176,7 @@ def writeRoute(entry: list[tuple[str, str]], clean=False):
             print(ret)
         if clean:
             continue
-        
+
         # Write new routes
         ret = os.popen(f"ip route add {dest} via {nexthop}").read()
         if len(ret):
@@ -187,6 +187,7 @@ def reset():
     cleanup()
     # Kill all Slurmd
     os.system(r"pkill -SIGINT -e -f '^slurmd\s'")
+    os.system(r"pkill -SIGINT -e -f 'munged\s-F'")
     # Reset hosts and routes
     writeHostfile(clean=True)
     writeRoute(Cluster.getRouteEntry(), clean=True)
@@ -224,6 +225,7 @@ def Run(config: NodeConfig):
     nat = net.addNAT(ip=f"{config.subnet[-2]}/{config.subnet.prefixlen}")
     nat.configDefault()
     nat.cmd("iptables -t nat -F POSTROUTING")  # Disable MASQUERADE as we don't need it
+    # nat.cmd("iptables -F FORWARD")
 
     net.start()
 
@@ -243,9 +245,12 @@ def Run(config: NodeConfig):
             continue
 
         # Reset output files
-        logfile = LogPath.format(h.name)
+        slurmdlog = LogPath.format(h.name)
+        mungedlog = LogPath.format(f"{h.name}.munged")
         outfile = StdoutPath.format(h.name)
         errfile = StderrPath.format(h.name)
+        h.cmd("echo >", slurmdlog)  # Maybe useful for debugging
+        h.cmd("echo >", mungedlog)
         h.cmd("echo >", outfile)
         h.cmd("echo >", errfile)
 
@@ -265,6 +270,19 @@ def Run(config: NodeConfig):
             r"echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control"
         )
 
+        # Start Munge at first
+        h.cmd(f"chmod munge:munge -R {TempList[1]}")
+        h.cmdPrint(
+            "sudo -u munge",
+            "/usr/sbin/munged -F -f",
+            f"--socket={TempList[1]}/munge.socket",
+            f"--pid-file={TempList[1]}/munged.pid",
+            f"--seed-file={TempList[1]}/munge.seed",
+            "&>",
+            mungedlog,
+            "&",
+        )
+
         if not Dryrun:
             h.cmdPrint(
                 "slurmd -D -N",
@@ -274,7 +292,7 @@ def Run(config: NodeConfig):
                 "-f",  # Specify config file
                 ConfPath,
                 "-L",  # Specify log file
-                logfile,
+                slurmdlog,
                 ">",
                 outfile,
                 "2>",
@@ -288,6 +306,7 @@ def Run(config: NodeConfig):
 
     # Slurm must be killed
     os.system(r"pkill -SIGINT -e -f '^slurmd\s'")
+    os.system(r"pkill -SIGINT -e -f 'munged\s-F'")
     net.stop()
 
 
