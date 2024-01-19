@@ -12,3 +12,4 @@ nodes.txt
 
 # Slurm output
 *.out
+*.log
