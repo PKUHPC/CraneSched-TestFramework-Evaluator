@@ -83,6 +83,9 @@ class ClusterConfig:
         return f"ClusterConfig(this={self.this}, nodes={self.nodes})"
 
     def setThisNode(self, name: str, param: dict, args) -> NodeConfig:
+        """
+        Set `.this`. Specify default values here.
+        """
         self.this.name = name
         self.this.num = args.num if args.num else param.get("HostNum", 3)
         self.this.offset = args.offset if args.offset else param.get("Offset", 1)
@@ -190,7 +193,10 @@ def reset():
     os.system(r"pkill -SIGINT -e -f 'munged\s-F'")
     # Reset hosts and routes
     writeHostfile(clean=True)
-    writeRoute(Cluster.getRouteEntry(), clean=True)
+    try:
+        writeRoute(Cluster.getRouteEntry(), clean=True)
+    except NameError:
+        pass
 
 
 def setMaxLimit():
@@ -342,8 +348,15 @@ if __name__ == "__main__":
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
     parser.add_argument("--dryrun", action="store_true", help="Do not starting slurmd")
+    parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     args = parser.parse_args()
+
+    reset()
+    if args.clean:
+        exit()
+    setLogLevel("info")
+    setMaxLimit()
 
     # Always from CLI
     ConfPath = os.path.abspath(
@@ -353,10 +366,6 @@ if __name__ == "__main__":
 
     # Build ClusterConfig
     Cluster = ClusterConfig(args)
-
-    reset()
-    setLogLevel("info")
-    setMaxLimit()
 
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())

@@ -85,6 +85,9 @@ class ClusterConfig:
         return f"ClusterConfig(this={self.this}, nodes={self.nodes})"
 
     def setThisNode(self, name: str, param: dict, args) -> NodeConfig:
+        """
+        Set `.this`. Specify default values here.
+        """
         self.this.name = name
         self.this.num = args.num if args.num else param.get("HostNum", 3)
         self.this.offset = args.offset if args.offset else param.get("Offset", 1)
@@ -189,10 +192,12 @@ def reset():
     cleanup()
     # Kill all craned
     os.system(r"pkill -SIGINT -e -f '^craned\s'")
-    os.system(r"pkill -SIGINT -e -f 'munged\s-F'")
     # Reset hosts and routes
     writeHostfile(clean=True)
-    writeRoute(Cluster.getRouteEntry(), clean=True)
+    try:
+        writeRoute(Cluster.getRouteEntry(), clean=True)
+    except NameError:
+        pass
 
 
 def setMaxLimit():
@@ -261,11 +266,9 @@ def Run(config: NodeConfig):
 
         # Reset output files
         cranedlog = LogPath.format(h.name)
-        mungedlog = LogPath.format(f"{h.name}.munged")
         outfile = StdoutPath.format(h.name)
         errfile = StderrPath.format(h.name)
         h.cmd("echo >", cranedlog)  # Maybe useful for debugging
-        h.cmd("echo >", mungedlog)
         h.cmd("echo >", outfile)
         h.cmd("echo >", errfile)
 
@@ -285,24 +288,11 @@ def Run(config: NodeConfig):
             r"echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control"
         )
 
-        # Start Munge at first
-        h.cmd(f"chmod munge:munge -R {TempList[1]}")
-        h.cmdPrint(
-            "sudo -u munge",
-            "/usr/sbin/munged -F -f",
-            f"--socket={TempList[1]}/munge.socket",
-            f"--pid-file={TempList[1]}/munged.pid",
-            f"--seed-file={TempList[1]}/munge.seed",
-            "&>",
-            mungedlog,
-            "&",
-        )
-
         if not Dryrun:
             h.cmdPrint(
                 CranedExec,
                 "-C",
-                ConfPath, 
+                ConfPath,
                 "-L",
                 cranedlog,
                 ">",
@@ -318,7 +308,6 @@ def Run(config: NodeConfig):
 
     # Slurm must be killed
     os.system(r"pkill -SIGINT -e -f '^craned\s'")
-    os.system(r"pkill -SIGINT -e -f 'munged\s-F'")
     net.stop()
 
 
@@ -336,13 +325,20 @@ if __name__ == "__main__":
         "--offset", type=int, help="naming offset of virtual hosts, default=1"
     )
     parser.add_argument("--subnet", type=str, help="subnet for virtual hosts")
-    parser.add_argument("--crane-conf", type=str, help="`crane.yaml` for craned")
+    parser.add_argument("--crane-conf", type=str, help="`config.yaml` for Craned")
     parser.add_argument(
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
-    parser.add_argument("--dryrun", action="store_true", help="Do not starting craned")
+    parser.add_argument("--dryrun", action="store_true", help="do not starting Craned")
+    parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     args = parser.parse_args()
+
+    reset()
+    if args.clean:
+        exit()
+    setLogLevel("info")
+    setMaxLimit()
 
     # Always from CLI
     ConfPath = os.path.abspath(
@@ -352,10 +348,6 @@ if __name__ == "__main__":
 
     # Build ClusterConfig
     Cluster = ClusterConfig(args)
-
-    reset()
-    setLogLevel("info")
-    setMaxLimit()
 
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())
