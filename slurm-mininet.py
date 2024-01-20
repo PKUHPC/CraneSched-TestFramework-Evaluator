@@ -197,18 +197,29 @@ def setMaxLimit():
     """
     Set the max limit of file descriptors and process number
     """
-    MaxLimit = 1048576
+    maxLimit = 4194304
     try:
         soft_limit, hard_limit = resource.getrlimit(resource.RLIMIT_NOFILE)
-        resource.setrlimit(resource.RLIMIT_NOFILE, (MaxLimit, MaxLimit))
-        print("File descriptor limit set to %d successfully!" % MaxLimit)
+        resource.setrlimit(resource.RLIMIT_NOFILE, (maxLimit, maxLimit))
+        print(f"File descriptor limit set to {maxLimit} successfully!")
     except ValueError as e:
         print(f"Error setting limit: {e}")
     except resource.error as e:
         print(f"Error setting limit: {e}")
 
-    with open("/proc/sys/kernel/pid_max", "w") as f:
-        f.write(str(MaxLimit))
+    # Kernel settings
+    kernelParams = {
+        "kernel.pid_max": "4194304",
+        "kernel.threads-max": "8388608",  
+        "net.core.somaxconn": "8192",
+        "vm.max_map_count": "131072",
+    }
+    for param, value in kernelParams.items():
+        ret = os.system(f"sysctl -w {param}={value}")
+        if ret != 0:
+            print(f"Error setting {param} to {value}")
+        else:
+            print(f"Set {param} to {value}")
 
 
 def Run(config: NodeConfig):
@@ -222,10 +233,12 @@ def Run(config: NodeConfig):
     )
     net.addController("c1")
 
+    # We DO NOT need NAT. Only use this to create a gateway node.
     nat = net.addNAT(ip=f"{config.subnet[-2]}/{config.subnet.prefixlen}")
     nat.configDefault()
-    nat.cmd("iptables -t nat -F POSTROUTING")  # Disable MASQUERADE as we don't need it
-    # nat.cmd("iptables -F FORWARD")
+    # Disable firewall on gateway node
+    nat.cmd("iptables -t nat -F")
+    nat.cmd("iptables -F")
 
     net.start()
 
