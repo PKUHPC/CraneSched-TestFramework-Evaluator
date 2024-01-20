@@ -4,11 +4,12 @@
 # Cloned
 mininet/
 openflow/
+CraneSched/
 
 # Utilities
 sync.sh
 sync_*
-nodes.txt
+*.txt
 
 # Slurm output
 *.out
