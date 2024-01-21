@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Full dynamic linked Crane deployment
-# For Rocky 9 Linux
+# For Rocky Linux 9
 
 # Proxy 
 export http_proxy=http://xcat:17890
@@ -67,15 +67,17 @@ if [ ! -d "CraneSched" ]; then
     }
 fi
 mkdir -p CraneSched/build && pushd CraneSched/build
-cmake -GNinja \
-    -DCRANE_FULL_DYNAMIC=ON \
+cmake -G Ninja \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DENABLE_UNQLITE=ON \
+    -DENABLE_BERKELEY_DB=OFF \
     -DCRANE_USE_GITEE_SOURCE=OFF .. || {
-    echo "Error cmake" && exit 1
+    echo "Error configuring with cmake" && exit 1
 }
-cmake --build . || {
+cmake --build --target cranectld craned crane_pam . || {
     echo "Error building" && exit 1
 }
-cmake --install . || {
-    echo "Error installing" && exit 1
-}
+# cmake --install . || {
+#     echo "Error installing" && exit 1
+# }
 popd

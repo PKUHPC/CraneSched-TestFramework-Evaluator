@@ -76,6 +76,9 @@ class ClusterConfig:
                     node.subnet = ipa.IPv4Network(params["Subnet"])
                     node.addr = ipa.IPv4Interface(params["NodeAddr"])
                 self.nodes[name] = node
+            if len(self.this.name) == 0:
+                print(f"Cannot find config for `{thisname}`, fall back to defaults")
+                self.setThisNode(thisname, {}, args)
         except FileNotFoundError or TypeError or KeyError or ValueError:
             print("Invalid config, fall back to defaults")
             self.setThisNode(thisname, {}, args)
@@ -144,7 +147,7 @@ class SingleSwitchTopo(Topo):
 
 
 def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
-    """Generate hostfile for Slurm"""
+    """Generate hostfile for Crane"""
     smark = "# BEGIN Mininet hosts #\n"
     emark = "# END Mininet hosts #\n"
 
@@ -291,6 +294,8 @@ def Run(config: NodeConfig):
         if not Dryrun:
             h.cmdPrint(
                 CranedExec,
+                "-l",  # Listen addr
+                f"{h.IP()}:10010",
                 "-C",
                 ConfPath,
                 "-L",
@@ -306,7 +311,7 @@ def Run(config: NodeConfig):
     # Open CLI for debugging
     CLI(net)
 
-    # Slurm must be killed
+    # Craned must be killed
     os.system(r"pkill -SIGINT -e -f '^craned\s'")
     net.stop()
 
@@ -342,7 +347,7 @@ if __name__ == "__main__":
 
     # Always from CLI
     ConfPath = os.path.abspath(
-        args.slurm_conf if args.slurm_conf else "/etc/slurm/slurm.conf"
+        args.crane_conf if args.crane_conf else "/etc/crane/crane.yaml"
     )
     Dryrun = args.dryrun if args.dryrun else False
 

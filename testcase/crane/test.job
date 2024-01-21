@@ -1,0 +1,14 @@
+#!/bin/bash
+#CBATCH --ntasks-per-node 1
+#CBATCH --nodes 1
+#CBATCH -c 1
+#CBATCH --mem 5M
+#CBATCH -J CraneTest
+#CBATCH -o crane/%J.out
+#CBATCH -p computing
+
+# Job array should be used when submitting!
+
+echo "start:$(date +%s.%N):$$"
+sleep 100
+echo "end:$(date +%s.%N)"
