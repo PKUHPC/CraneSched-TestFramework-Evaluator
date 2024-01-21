@@ -1,6 +1,8 @@
 #!/bin/bash
 rm -f *.out
 rm -f slurm/*.out
+rm -f slurm/result
+mkdir -p slurm/result
 
 systemctl stop slurmctld
 systemctl stop slurmdbd

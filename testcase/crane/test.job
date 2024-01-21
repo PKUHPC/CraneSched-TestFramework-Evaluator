@@ -4,7 +4,7 @@
 #CBATCH -c 1
 #CBATCH --mem 5M
 #CBATCH -J CraneTest
-#CBATCH -o crane/%J.out
+#CBATCH -o result/%j.out
 #CBATCH -p computing
 
 # Job array should be used when submitting!
