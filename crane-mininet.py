@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
 
+"""
+Craned in Mininet
+CraneCtld should be manually started on the head node.
+Tested on Rocky Linux 9, Python 3.9.18, Mininet 2.3.1b4.
+"""
+
 import os
 import pty
 import yaml
@@ -234,7 +240,7 @@ class CranedHost(Host):
         """
         if ver == 1:
             self.cmd("mount -t tmpfs tmpfs /sys/fs/cgroup")
-            # pid 
+            # pid
             self.cmd("mkdir /sys/fs/cgroup/pids")
             self.cmd("mount -t cgroup pids -opids /sys/fs/cgroup/pids")
             # freezer
@@ -245,7 +251,9 @@ class CranedHost(Host):
             self.cmd("mount -t cgroup cpuset -ocpuset /sys/fs/cgroup/cpuset")
             # cpu, cpuacct
             self.cmd("mkdir /sys/fs/cgroup/cpu,cpuacct")
-            self.cmd("mount -t cgroup cpu,cpuacct -ocpu,cpuacct /sys/fs/cgroup/cpu,cpuacct")
+            self.cmd(
+                "mount -t cgroup cpu,cpuacct -ocpu,cpuacct /sys/fs/cgroup/cpu,cpuacct"
+            )
             # memory
             self.cmd("mkdir /sys/fs/cgroup/memory")
             self.cmd("mount -t cgroup memory -omemory /sys/fs/cgroup/memory")
@@ -342,7 +350,7 @@ def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
 
 def writeRoute(entry: list[tuple[str, str]], clean=False):
     """
-    Check and add required route. 
+    Check and add required route.
     Note: Routes are temporarily added. Reboot will clean them.
     """
     for dest, nexthop in entry:
@@ -363,9 +371,13 @@ def reset():
     cleanup()
     # Kill all craned
     os.system(r"pkill -SIGKILL -e -f '^craned\s'")
-    # Reset cgroup 
-    os.system(r'pushd /sys/fs/cgroup/cpu; for i in $(ls | grep Crane); do cgdelete "cpu:$i" ; done; popd')
-    os.system(r'pushd /sys/fs/cgroup/memory; for i in $(ls | grep Crane); do cgdelete "memory:$i" ; done; popd')
+    # Reset cgroup
+    os.system(
+        r'pushd /sys/fs/cgroup/cpu; for i in $(ls | grep Crane); do cgdelete "cpu:$i" ; done; popd'
+    )
+    os.system(
+        r'pushd /sys/fs/cgroup/memory; for i in $(ls | grep Crane); do cgdelete "memory:$i" ; done; popd'
+    )
     # Reset hosts and routes
     writeHostfile(clean=True)
     try:
@@ -471,8 +483,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
-    parser.add_argument("--head", action="store_true", help="generate hosts and routes only")
-    parser.add_argument("--dryrun", action="store_true", help="prepare the env but not start Craned")
+    parser.add_argument(
+        "--head", action="store_true", help="generate hosts and routes only"
+    )
+    parser.add_argument(
+        "--dryrun", action="store_true", help="prepare the env but not start Craned"
+    )
     parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     args = parser.parse_args()
