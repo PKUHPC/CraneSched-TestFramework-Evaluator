@@ -1,5 +1,5 @@
 # the hostname of node which is running cranectld
-ControlMachine: cranectl
+ControlMachine: 192.168.2.13
 # the name of this cluster
 ClusterName: cranetest
 # the ip address of control machine
@@ -19,15 +19,15 @@ DbConfigPath: /etc/crane/database.yaml
 # Craned Options
 
 # debug level of cranectld
-CraneCtldDebugLevel: debug
+CraneCtldDebugLevel: trace
 # file path of cranectld log file
 CraneCtldLogFile: /tmp/cranectld/cranectld.log
 # Determines whether the cranectld is running in the background
 CraneCtldForeground: true
 # debug level of craned
-CranedDebugLevel: debug
+CranedDebugLevel: trace
 # file path of craned log file
-CranedLogFile: /tmp/craned/craned.log
+# CranedLogFile: /tmp/craned/craned.log
 # Determines whether the craned is running in the background
 CranedForeground: true
 

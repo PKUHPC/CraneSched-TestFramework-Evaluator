@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 
 import os
+import pty
 import yaml
+import select
 import argparse
 import resource
 import ipaddress as ipa
-from time import sleep
-from functools import partial
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import Host
 from mininet.link import TCLink
-from mininet.log import setLogLevel
+from mininet.log import error, setLogLevel
 from mininet.cli import CLI
 from mininet.clean import cleanup
 
@@ -21,14 +21,6 @@ LogPath = "/tmp/output/{}.log"
 StdoutPath = "/tmp/output/{}.out"
 StderrPath = "/tmp/output/{}.err"
 HostName = "craned{}"
-
-CranedExec = "CraneSched/build/src/Craned/craned"
-
-# (A, B) means contents in B will be persisted in A.
-PersistList = [("/tmp/output", "/tmp/output")]
-
-# Each host's temporary directory is invisible to others.
-TempList = ["/tmp/crane"]
 
 
 class NodeConfig:
@@ -67,6 +59,7 @@ class ClusterConfig:
             with open(args.conf, "r") as file:
                 config = yaml.safe_load(file)  # type: dict
             for name, params in config["cluster"].items():
+                # Parse config into NodeConfig
                 if name == thisname:
                     node = self.setThisNode(thisname, params, args)
                 else:
@@ -76,13 +69,13 @@ class ClusterConfig:
                     node.subnet = ipa.IPv4Network(params["Subnet"])
                     node.addr = ipa.IPv4Interface(params["NodeAddr"])
                 self.nodes[name] = node
-            if len(self.this.name) == 0:
-                print(f"Cannot find config for `{thisname}`, fall back to defaults")
-                self.setThisNode(thisname, {}, args)
+            if len(self.this.name) == 0 and not args.head:
+                # If config not found and is not head, set it to defaults
+                print(f"Cannot find config for `{thisname}`, use defaults for it")
+                self.nodes[thisname] = self.setThisNode(thisname, {}, args)
         except FileNotFoundError or TypeError or KeyError or ValueError:
-            print("Invalid config, fall back to defaults")
-            self.setThisNode(thisname, {}, args)
-            self.nodes = {thisname: self.this}
+            print("Invalid config file, ignore and fall back to defaults")
+            self.nodes = {thisname: self.setThisNode(thisname, {}, args)}
 
     def __str__(self) -> str:
         return f"ClusterConfig(this={self.this}, nodes={self.nodes})"
@@ -104,7 +97,7 @@ class ClusterConfig:
 
     def getHostEntry(self) -> list[tuple[str, str]]:
         entry = []
-        for n in self.nodes:
+        for n in sorted(self.nodes, key=lambda i: self.nodes[i].offset):
             for name, addr in self.nodes[n].hosts(cidr=False):
                 entry.append((name, addr))
         return entry
@@ -124,6 +117,180 @@ class ClusterConfig:
                 )
             )
         return entry
+
+
+class CranedHost(Host):
+    """
+    Virtual host for Craned
+    """
+
+    # Craned executable
+    CranedExec = "CraneSched/ReleaseBuild/src/Craned/craned"
+    # (A, B) means contents in B will be persisted in A.
+    PersistList = [("/tmp/output", "/tmp/output")]
+    # Each host's temporary directory is invisible to others.
+    TempList = ["/tmp/crane", "/tmp/craned"]
+
+    def __init__(self, name, **params):
+        """
+        With private dirs set
+        """
+        super().__init__(
+            name=name,
+            inNamespace=True,
+            privateDirs=self.PersistList + self.TempList,
+            **params,
+        )
+
+    # Command support via shell process in namespace
+    def startShell(self, mnopts=None):
+        """
+        Copied and modified from `mininet/node.py`.
+        Start a shell process for running commands
+        """
+        if self.shell:
+            error(f"{self.name}: shell is already running\n")
+            return
+        # mnexec: (c)lose descriptors, (d)etach from tty,
+        # (p)rint pid, and run in (n)amespace
+        opts = "-cd" if mnopts is None else mnopts
+        if self.inNamespace:
+            opts += "n"
+
+        # Modified here, add a seperated uts ns
+        cmd = ["unshare", "--uts"]
+
+        # bash -i: force interactive
+        # -s: pass $* to shell, and make process easy to find in ps
+        # prompt is set to sentinel chr( 127 )
+        cmd += [
+            "mnexec",
+            opts,
+            "env",
+            "PS1=" + chr(127),
+            "bash",
+            "--norc",
+            "--noediting",
+            "-is",
+            "mininet:" + self.name,
+        ]
+
+        # Spawn a shell subprocess in a pseudo-tty, to disable buffering
+        # in the subprocess and insulate it from signals (e.g. SIGINT)
+        # received by the parent
+        self.master, self.slave = pty.openpty()
+        self.shell = self._popen(
+            cmd, stdin=self.slave, stdout=self.slave, stderr=self.slave, close_fds=False
+        )
+        # XXX BL: This doesn't seem right, and we should also probably
+        # close our files when we exit...
+        self.stdin = os.fdopen(self.master, "r")
+        self.stdout = self.stdin
+        self.pid = self.shell.pid
+        self.pollOut = select.poll()
+        self.pollOut.register(self.stdout)
+        # Maintain mapping between file descriptors and nodes
+        # This is useful for monitoring multiple nodes
+        # using select.poll()
+        self.outToNode[self.stdout.fileno()] = self
+        self.inToNode[self.stdin.fileno()] = self
+        self.execed = False
+        self.lastCmd = None
+        self.lastPid = None
+        self.readbuf = ""
+        # Wait for prompt
+        while True:
+            data = self.read(1024)
+            if data[-1] == chr(127):
+                break
+            self.pollOut.poll()
+        self.waiting = False
+        # +m: disable job control notification
+        self.cmd("unset HISTFILE; stty -echo; set +m")
+
+        # Prepare environment for Craned
+        self.setHostname()
+        self.setCgroup(ver=1)
+
+    def terminate(self):
+        """
+        Explicitly kill Craned process
+        """
+        # Kill all processes in subtree
+        self.cmd(r"pkill -SIGKILL -e -f '^craned\s'")
+        super().terminate()
+
+    def setHostname(self, hostname=""):
+        """
+        Set hostname in new UTS namespace
+        """
+        if hostname == "":
+            hostname = self.name
+        self.cmd(f"hostname {hostname}")
+
+    def setCgroup(self, ver=2):
+        """
+        Setup Cgroup for Crane
+        """
+        if ver == 1:
+            self.cmd("mount -t tmpfs tmpfs /sys/fs/cgroup")
+            # pid 
+            self.cmd("mkdir /sys/fs/cgroup/pids")
+            self.cmd("mount -t cgroup pids -opids /sys/fs/cgroup/pids")
+            # freezer
+            self.cmd("mkdir /sys/fs/cgroup/freezer")
+            self.cmd("mount -t cgroup freezer -ofreezer /sys/fs/cgroup/freezer")
+            # cpuset
+            self.cmd("mkdir /sys/fs/cgroup/cpuset")
+            self.cmd("mount -t cgroup cpuset -ocpuset /sys/fs/cgroup/cpuset")
+            # cpu, cpuacct
+            self.cmd("mkdir /sys/fs/cgroup/cpu,cpuacct")
+            self.cmd("mount -t cgroup cpu,cpuacct -ocpu,cpuacct /sys/fs/cgroup/cpu,cpuacct")
+            # memory
+            self.cmd("mkdir /sys/fs/cgroup/memory")
+            self.cmd("mount -t cgroup memory -omemory /sys/fs/cgroup/memory")
+            # devices
+            self.cmd("mkdir /sys/fs/cgroup/devices")
+            self.cmd("mount -t cgroup devices -odevices /sys/fs/cgroup/devices")
+            # blkio
+            self.cmd("mkdir /sys/fs/cgroup/blkio")
+            self.cmd("mount -t cgroup blkio -oblkio /sys/fs/cgroup/blkio")
+        elif ver == 2:
+            self.cmd(
+                "mount -t cgroup2 -o",
+                "rw,nosuid,nodev,noexec,relatime,seclabel,nsdelegate,memory_recursiveprot",
+                "cgroup2",
+                "/sys/fs/cgroup",
+            )
+
+            # Enable controllers for subtree
+            self.cmd(
+                r"echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control"
+            )
+        else:
+            raise ValueError(f"Illegal Cgroup version: {ver}")
+
+    def launch(self, logfile: str, stdout: str, stderr: str, reset=True):
+        """
+        Launch Craned process
+        """
+        if reset:
+            self.cmd("echo >", logfile)
+            self.cmd("echo >", stdout)
+            self.cmd("echo >", stderr)
+
+        self.cmdPrint(
+            self.CranedExec,
+            "-C",
+            ConfPath,
+            "-L",
+            logfile,
+            ">",
+            stdout,
+            "2>",
+            stderr,
+            "&",
+        )
 
 
 class SingleSwitchTopo(Topo):
@@ -175,7 +342,8 @@ def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
 
 def writeRoute(entry: list[tuple[str, str]], clean=False):
     """
-    Check and add required route.
+    Check and add required route. 
+    Note: Routes are temporarily added. Reboot will clean them.
     """
     for dest, nexthop in entry:
         # Clean existing routes
@@ -194,7 +362,10 @@ def writeRoute(entry: list[tuple[str, str]], clean=False):
 def reset():
     cleanup()
     # Kill all craned
-    os.system(r"pkill -SIGINT -e -f '^craned\s'")
+    os.system(r"pkill -SIGKILL -e -f '^craned\s'")
+    # Reset cgroup 
+    os.system(r'pushd /sys/fs/cgroup/cpu; for i in $(ls | grep Crane); do cgdelete "cpu:$i" ; done; popd')
+    os.system(r'pushd /sys/fs/cgroup/memory; for i in $(ls | grep Crane); do cgdelete "memory:$i" ; done; popd')
     # Reset hosts and routes
     writeHostfile(clean=True)
     try:
@@ -222,7 +393,9 @@ def setMaxLimit():
         "kernel.pid_max": "4194304",
         "kernel.threads-max": "8388608",
         "net.core.somaxconn": "8192",
-        "vm.max_map_count": "131072",
+        "vm.max_map_count": "1677720",
+        "net.ipv6.conf.default.disable_ipv6": "1",
+        "net.ipv6.conf.all.disable_ipv6": "1",
     }
     for param, value in kernelParams.items():
         ret = os.system(f"sysctl -w {param}={value}")
@@ -238,7 +411,7 @@ def Run(config: NodeConfig):
     net = Mininet(
         ipBase=str(config.subnet),
         topo=topo,
-        host=partial(Host, privateDirs=PersistList + TempList),  # type: ignore
+        host=CranedHost,  # customized host
         link=TCLink,
     )
     net.addController("c1")
@@ -255,7 +428,7 @@ def Run(config: NodeConfig):
     print("Testing connectivity")
     if (
         net.pingAll()
-        if config.num < 10
+        if config.num < 5
         else net.ping(hosts=[net.hosts[0], net.hosts[-1]])
     ) > 0:
         print("Network not fully connected, exiting...")
@@ -264,55 +437,19 @@ def Run(config: NodeConfig):
     print("Starting craned..." + ("Dryrun=True, won't start craned" if Dryrun else ""))
     for h in net.hosts:
         # Ignore NATs
-        if not isinstance(h, Host):
+        if not isinstance(h, CranedHost):
             continue
 
-        # Reset output files
         cranedlog = LogPath.format(h.name)
         outfile = StdoutPath.format(h.name)
         errfile = StderrPath.format(h.name)
-        h.cmd("echo >", cranedlog)  # Maybe useful for debugging
-        h.cmd("echo >", outfile)
-        h.cmd("echo >", errfile)
-
-        # Mount cgroup manually
-        h.cmd(
-            "mount",
-            "-t",
-            "cgroup2",
-            "-o",
-            "rw,nosuid,nodev,noexec,relatime,seclabel,nsdelegate,memory_recursiveprot",
-            "cgroup2",
-            "/sys/fs/cgroup",
-        )
-
-        # Enable controllers for subtree
-        h.cmd(
-            r"echo '+cpuset +cpu +io +memory +pids' > /sys/fs/cgroup/cgroup.subtree_control"
-        )
 
         if not Dryrun:
-            h.cmdPrint(
-                CranedExec,
-                "-l",  # Listen addr
-                f"{h.IP()}:10010",
-                "-C",
-                ConfPath,
-                "-L",
-                cranedlog,
-                ">",
-                outfile,
-                "2>",
-                errfile,
-                "&",
-            )
-            sleep(0.1)
+            h.launch(cranedlog, outfile, errfile)
+            # sleep(0.1)
 
     # Open CLI for debugging
     CLI(net)
-
-    # Craned must be killed
-    os.system(r"pkill -SIGINT -e -f '^craned\s'")
     net.stop()
 
 
@@ -334,7 +471,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
-    parser.add_argument("--dryrun", action="store_true", help="do not starting Craned")
+    parser.add_argument("--head", action="store_true", help="generate hosts and routes only")
+    parser.add_argument("--dryrun", action="store_true", help="prepare the env but not start Craned")
     parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     args = parser.parse_args()
@@ -347,7 +485,7 @@ if __name__ == "__main__":
 
     # Always from CLI
     ConfPath = os.path.abspath(
-        args.crane_conf if args.crane_conf else "/etc/crane/crane.yaml"
+        args.crane_conf if args.crane_conf else "/etc/crane/config.yaml"
     )
     Dryrun = args.dryrun if args.dryrun else False
 
@@ -359,4 +497,6 @@ if __name__ == "__main__":
     if len(Cluster.nodes) > 1:
         writeRoute(Cluster.getRouteEntry())
 
-    Run(Cluster.this)
+    # Only generate files for head node, do not run Mininet
+    if not args.head:
+        Run(Cluster.this)

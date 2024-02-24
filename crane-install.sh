@@ -36,13 +36,20 @@ fi
 # dependency and toolchain for Crane
 dnf install -y patch \
     ninja-build \
+    llvm-toolset \
     openssl-devel \
     pam-devel \
     zlib-devel \
+    libatomic \
+    libstdc++-static \
+    libtsan \
     libaio \
     libaio-devel || {
     echo "Error installing toolchain and dependency for craned" && exit 1        
 }
+
+# libstdc++-static libatomic for debug
+# libtsan for CRANE_THREAD_SANITIZER
 
 # Check if cmake version is higher than 3.24
 required_version="3.24"
@@ -65,19 +72,46 @@ if [ ! -d "CraneSched" ]; then
     git clone https://github.com/PKUHPC/CraneSched.git || {
         echo "Error cloning CraneSched" && exit 1
     }
+
 fi
-mkdir -p CraneSched/build && pushd CraneSched/build
+pushd CraneSched
+git checkout bugfix/deadlock || {
+    echo "Error checking out branch bugfix/deadlock" && exit 1
+}
+
+git fetch && git pull
+mkdir -p ReleaseBuild && pushd ReleaseBuild
 cmake -G Ninja \
-    -DCMAKE_BUILD_TYPE=Debug \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER=clang \
+    -DCMAKE_CXX_COMPILER=clang++ \
+    -DCMAKE_C_FLAGS_INIT="--gcc-toolchain=/usr" \
+    -DCMAKE_CXX_FLAGS_INIT="--gcc-toolchain=/usr" \
     -DENABLE_UNQLITE=ON \
     -DENABLE_BERKELEY_DB=OFF \
     -DCRANE_USE_GITEE_SOURCE=OFF .. || {
     echo "Error configuring with cmake" && exit 1
 }
-cmake --build --target cranectld craned crane_pam . || {
+
+# mkdir -p cmake-build-debug-clang-16 && pushd cmake-build-debug-clang-16
+# cmake -GNinja \
+#     -DCMAKE_BUILD_TYPE=Debug \
+#     -DCMAKE_C_COMPILER=clang \
+#     -DCMAKE_CXX_COMPILER=clang++ \
+#     -DCMAKE_C_FLAGS_INIT="--gcc-toolchain=/opt/rh/gcc-toolset-13/root/usr" \
+#     -DCMAKE_CXX_FLAGS_INIT="--gcc-toolchain=/opt/rh/gcc-toolset-13/root/usr" \
+#     -DENABLE_UNQLITE=ON \
+#     -DENABLE_BERKELEY_DB=OFF \
+#     -DCRANE_USE_GITEE_SOURCE=OFF \
+#     -DCRANE_FULL_DYNAMIC=ON .. || {
+#     echo "Error configuring with cmake" && exit 1
+# }
+
+cmake --build . --clean-first || {
     echo "Error building" && exit 1
 }
 # cmake --install . || {
 #     echo "Error installing" && exit 1
 # }
+popd
 popd
