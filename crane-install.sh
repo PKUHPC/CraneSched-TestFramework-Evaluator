@@ -72,24 +72,22 @@ if [ ! -d "CraneSched" ]; then
     git clone https://github.com/PKUHPC/CraneSched.git || {
         echo "Error cloning CraneSched" && exit 1
     }
-
 fi
 pushd CraneSched
-git checkout bugfix/deadlock || {
-    echo "Error checking out branch bugfix/deadlock" && exit 1
+git checkout bugfix/use_after_free || {
+    echo "Error checking out branch bugfix/use_after_free" && exit 1
 }
 
 git fetch && git pull
-mkdir -p ReleaseBuild && pushd ReleaseBuild
+mkdir -p cmake-build-debug && pushd cmake-build-debug
 cmake -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=Debug \
     -DCMAKE_C_COMPILER=clang \
     -DCMAKE_CXX_COMPILER=clang++ \
-    -DCMAKE_C_FLAGS_INIT="--gcc-toolchain=/usr" \
-    -DCMAKE_CXX_FLAGS_INIT="--gcc-toolchain=/usr" \
     -DENABLE_UNQLITE=ON \
     -DENABLE_BERKELEY_DB=OFF \
-    -DCRANE_USE_GITEE_SOURCE=OFF .. || {
+    -DCRANE_USE_GITEE_SOURCE=OFF \
+    -DCRANE_FULL_DYNAMIC=ON .. || {
     echo "Error configuring with cmake" && exit 1
 }
 

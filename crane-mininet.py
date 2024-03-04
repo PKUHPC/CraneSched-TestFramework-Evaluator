@@ -35,6 +35,7 @@ class NodeConfig:
     def __init__(self, name) -> None:
         self.name = name
         self.num = 3
+        self.sw_num = 1
         self.offset = 1
         self.subnet = ipa.IPv4Network("10.0.0.0/8", strict=True)
         self.addr = ipa.IPv4Interface("192.168.0.10/24")
@@ -62,7 +63,7 @@ class ClusterConfig:
         self.this = NodeConfig("")
         thisname = os.popen("hostname").read().strip()
         try:
-            with open(args.conf, "r") as file:
+            with open(args.conf.strip(), "r") as file:
                 config = yaml.safe_load(file)  # type: dict
             for name, params in config["cluster"].items():
                 # Parse config into NodeConfig
@@ -71,6 +72,7 @@ class ClusterConfig:
                 else:
                     node = NodeConfig(name)
                     node.num = params["HostNum"]
+                    node.sw_num = params["SwitchNum"]
                     node.offset = params["Offset"]
                     node.subnet = ipa.IPv4Network(params["Subnet"])
                     node.addr = ipa.IPv4Interface(params["NodeAddr"])
@@ -92,6 +94,7 @@ class ClusterConfig:
         """
         self.this.name = name
         self.this.num = args.num if args.num else param.get("HostNum", 3)
+        self.this.sw_num = param.get("SwitchNum", 1)
         self.this.offset = args.offset if args.offset else param.get("Offset", 1)
         self.this.subnet = ipa.IPv4Network(
             args.subnet if args.subnet else param.get("Subnet", "10.0.0.0/8")
@@ -130,8 +133,9 @@ class CranedHost(Host):
     Virtual host for Craned
     """
 
+    # TODO: Make these configurable
     # Craned executable
-    CranedExec = "CraneSched/ReleaseBuild/src/Craned/craned"
+    CranedExec = "CraneSched/cmake-build-debug/src/Craned/craned"
     # (A, B) means contents in B will be persisted in A.
     PersistList = [("/tmp/output", "/tmp/output")]
     # Each host's temporary directory is invisible to others.
@@ -321,6 +325,40 @@ class SingleSwitchTopo(Topo):
             )
 
 
+class MultiSwitchTopo(Topo):
+    """
+    Multiple switch topo to utilize multi-core CPU,
+    allowing for a variable number of switches.
+    """
+
+    def __init__(self, config: NodeConfig, **opts):
+        super().__init__(**opts)
+
+        num_switches = config.sw_num
+        if num_switches < 1:
+            raise ValueError("num_switches must be at least 1")
+
+        total_hosts = config.num
+        hosts_per_switch, extra_hosts = divmod(total_hosts, num_switches)
+
+        switches = [self.addSwitch(f"s{i+1}") for i in range(num_switches)]
+
+        host_iter = config.hosts(cidr=True)
+        for i, switch in enumerate(switches):
+            # Allocate extra hosts to the first few switches
+            num_hosts_for_switch = hosts_per_switch + (1 if i < extra_hosts else 0)
+            for _ in range(num_hosts_for_switch):
+                try:
+                    name, ip = next(host_iter)
+                    host = self.addHost(name=name, ip=ip)
+                    self.addLink(host, switch)
+                except StopIteration:
+                    break
+
+        for i in range(len(switches) - 1):
+            self.addLink(switches[i], switches[i + 1])
+
+
 def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
     """Generate hostfile for Crane"""
     smark = "# BEGIN Mininet hosts #\n"
@@ -419,7 +457,11 @@ def setMaxLimit():
 
 def Run(config: NodeConfig):
     """Create network and run the simulation"""
-    topo = SingleSwitchTopo(config)
+    if config.sw_num > 1:
+        topo = MultiSwitchTopo(config)
+    else:
+        topo = SingleSwitchTopo(config)
+
     net = Mininet(
         ipBase=str(config.subnet),
         topo=topo,
