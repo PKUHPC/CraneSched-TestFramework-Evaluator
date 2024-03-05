@@ -135,12 +135,12 @@ class PBSMoMHost(Host):
 
     # TODO: Make these configurable
     # PBS executable
-    PBSMoMExec = "CraneSched/cmake-build-debug/src/Craned/craned"
+    PBSMoMExec = "/opt/pbs/sbin/pbs_mom"
     # (A, B) means contents in B will be persisted in A.
     PersistList = [("/tmp/output", "/tmp/output")]
     # Each host's temporary directory is invisible to others.
     TempList = ["/tmp/pbs"]
-    # $PBS_HOME, see manpage.
+    # PBS_HOME must be isolated with proper priviledges, see manpage. 
     PBSRealHome = "/var/spool/pbs"
     PBSHome = "/var/mininet/pbs/{}"
 
@@ -231,7 +231,7 @@ class PBSMoMHost(Host):
         Explicitly kill PBS process
         """
         # Kill all processes in subtree
-        self.cmd(r"pkill -SIGKILL -e -f '^pbs_mom\s'")
+        self.cmd(r"pkill -SIGKILL -e -f 'pbs_mom'")
         super().terminate()
 
     def setHostname(self, hostname=""):
@@ -244,8 +244,13 @@ class PBSMoMHost(Host):
 
     def setPBSHome(self):
         """
-        Set PBS home directory
+        Set PBS_HOME directory
+        The temp PBS_HOME is copied from original installation
         """
+        # Make sure parent dir exists
+        parent = '/'.join(self.PBSHome.split("/")[:-1])
+        if not os.path.exists(parent):
+            self.cmd(f"mkdir -p {parent}")
         self.PBSHome = self.PBSHome.format(self.name)
 
         # Remove the directory if exists
@@ -346,6 +351,7 @@ class MultiSwitchTopo(Topo):
     """
     Multiple switch topo to utilize multi-core CPU,
     allowing for a variable number of switches.
+    NOT RECOMMEND!
     """
 
     def __init__(self, config: NodeConfig, **opts):
@@ -432,7 +438,7 @@ def writeNodeList(entry: list[tuple[str, str]], clean=False):
 def reset():
     cleanup()
     # Kill all pbs_mom
-    os.system(r"pkill -SIGKILL -e -f '^pbs_mom'")
+    os.system(r"pkill -SIGKILL -e -f 'pbs_mom'")
 
     # TODO: Fix this if necessary
     # Reset cgroup
@@ -551,7 +557,7 @@ if __name__ == "__main__":
         "--offset", type=int, help="naming offset of virtual hosts, default=1"
     )
     parser.add_argument("--subnet", type=str, help="subnet for virtual hosts")
-    parser.add_argument("--pbs-conf", type=str, help="`pbs.conf` for PBS")
+    parser.add_argument("--pbs-conf", type=str, help="`mom_priv/config` for PBS")
     parser.add_argument(
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
@@ -571,13 +577,20 @@ if __name__ == "__main__":
     # Build ClusterConfig
     Cluster = ClusterConfig(args)
     
-    # Clean Here!
-    reset()
-    if args.clean:
-        exit()
+    # Clean the mininet and existing processes
+    if args.head and args.clean:
+        print("--head and --clean is incompatible")
+        exit(1)
 
-    setLogLevel("info")
-    setMaxLimit()
+    if args.head:
+        print("--head is true, won't clean")
+    else:
+        reset()
+        if args.clean:
+            print("Cleaned. --clean is true")
+            exit(0)
+        setLogLevel("info")
+        setMaxLimit()
 
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())

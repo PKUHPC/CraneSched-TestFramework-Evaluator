@@ -77,6 +77,10 @@ if [ $create_new_svr_data -eq 1 ] ; then
 fi
 
 if [ $server_started -eq 1 ]; then
+	echo "*** Adding default settings"
+	${PBS_EXEC}/bin/qmgr -c "set server job_history_enable=1"
+	${PBS_EXEC}/bin/qmgr -c "set server acl_roots=root"
+
 	echo "*** Stopping PBS Server"
 	${PBS_EXEC}/bin/qterm
 fi
