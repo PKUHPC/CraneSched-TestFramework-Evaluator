@@ -49,13 +49,13 @@ PriorityWeightQ0S: 1000000
 
 # list of configuration information of the computing machine
 Nodes:
-  - name: "craned[1-3000]"
+  - name: "craned[1-192]"
     cpu: 4
     memory: 166G
 
 # partition information list
 Partitions:
   - name: computing
-    nodes: "craned[1-3000]"
+    nodes: "craned[1-192]"
 
 DefaultPartition: computing

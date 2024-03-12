@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 """
-PBS in Mininet
-PBS Server should be manually started on the head node.
+SGE in Mininet
+SGE Qmaster should be manually started on the master node.
 Tested on Rocky Linux 9, Python 3.9.18, Mininet 2.3.1b4.
 """
 
@@ -14,6 +14,7 @@ import argparse
 import resource
 import subprocess
 import ipaddress as ipa
+from time import sleep
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.node import Host
@@ -24,12 +25,17 @@ from mininet.clean import cleanup
 
 # Constants
 HostPath = "/etc/hosts"
-LogPath = "/tmp/output/{}.log"
 StdoutPath = "/tmp/output/{}.out"
 StderrPath = "/tmp/output/{}.err"
-HostName = "pbsm{}"
+HostName = "sged{}"
 
-PBSCleanScript = "utils/clean_pbs.sh"
+SGEMaster = ""
+SGERoot = "/opt/sge"
+SGEBin = "/opt/sge/bin/lx-amd64"
+SGECell = "default"
+SGEStartScript = "utils/start_sge_execd.sh"
+SGECleanScript = "utils/clean_sge.sh"
+
 
 class NodeConfig:
     """Node configuration"""
@@ -61,12 +67,20 @@ class ClusterConfig:
     """Cluster configuration"""
 
     def __init__(self, args) -> None:
+        self.head = ""
         self.nodes = {}
         self.this = NodeConfig("")
+
+        # store hostname
         thisname = os.popen("hostname").read().strip()
         try:
             with open(args.conf.strip(), "r") as file:
                 config = yaml.safe_load(file)  # type: dict
+
+            # head node
+            self.head = config["head"]
+
+            # each node in cluster
             for name, params in config["cluster"].items():
                 # Parse config into NodeConfig
                 if name == thisname:
@@ -79,10 +93,12 @@ class ClusterConfig:
                     node.subnet = ipa.IPv4Network(params["Subnet"])
                     node.addr = ipa.IPv4Interface(params["NodeAddr"])
                 self.nodes[name] = node
+
+            # If config not found and is not head, set it to defaults
             if len(self.this.name) == 0 and not args.head:
-                # If config not found and is not head, set it to defaults
                 print(f"Cannot find config for `{thisname}`, use defaults for it")
                 self.nodes[thisname] = self.setThisNode(thisname, {}, args)
+
         except FileNotFoundError or TypeError or KeyError or ValueError:
             print("Invalid config file, ignore and fall back to defaults")
             self.nodes = {thisname: self.setThisNode(thisname, {}, args)}
@@ -130,19 +146,16 @@ class ClusterConfig:
         return entry
 
 
-class PBSMoMHost(Host):
+class SGEExecdHost(Host):
     """
-    Virtual host for PBS MoM
+    Virtual host for SGEExec
     """
-    # PBS executable
-    PBSMoMExec = "/opt/pbs/sbin/pbs_mom"
+
+    # TODO: Make these configurable
     # (A, B) means contents in B will be persisted in A.
     PersistList = [("/tmp/output", "/tmp/output")]
     # Each host's temporary directory is invisible to others.
-    TempList = ["/tmp/pbs"]
-    # PBS_HOME must be isolated with proper priviledges, see manpage. 
-    PBSRealHome = "/var/spool/pbs"
-    PBSHome = "/var/mininet/pbs/{}"
+    TempList = ["/tmp/sge"]
 
     def __init__(self, name, **params):
         """
@@ -221,17 +234,16 @@ class PBSMoMHost(Host):
         # +m: disable job control notification
         self.cmd("unset HISTFILE; stty -echo; set +m")
 
-        # Prepare environment for PBS
+        # Prepare environment for SGE
         self.setHostname()
         self.setCgroup(ver=1)
-        self.setPBSHome()
 
     def terminate(self):
         """
-        Explicitly kill PBS process
+        Explicitly kill SGE process
         """
         # Kill all processes in subtree
-        self.cmd(r"pkill -SIGKILL -e -f 'pbs_mom'")
+        self.cmd(r"pkill -SIGKILL -e -f 'sge_execd'")
         super().terminate()
 
     def setHostname(self, hostname=""):
@@ -242,25 +254,9 @@ class PBSMoMHost(Host):
             hostname = self.name
         self.cmd(f"hostname {hostname}")
 
-    def setPBSHome(self):
-        """
-        Set PBS_HOME directory
-        The temp PBS_HOME is copied from original installation
-        """
-        # Make sure parent dir exists
-        parent = '/'.join(self.PBSHome.split("/")[:-1])
-        if not os.path.exists(parent):
-            self.cmd(f"mkdir -p {parent}")
-        self.PBSHome = self.PBSHome.format(self.name)
-
-        # Remove the directory if exists
-        if os.path.exists(self.PBSHome):
-            self.cmd(f"rm -rf {self.PBSHome}")
-        self.cmd(f"cp -a {self.PBSRealHome} {self.PBSHome}")
-
     def setCgroup(self, ver=2):
         """
-        Setup Cgroup for PBS
+        Setup Cgroup for SGE
         """
         if ver == 1:
             self.cmd("mount -t tmpfs tmpfs /sys/fs/cgroup")
@@ -302,23 +298,17 @@ class PBSMoMHost(Host):
         else:
             raise ValueError(f"Illegal Cgroup version: {ver}")
 
-    def launch(self, logfile: str, stdout: str, stderr: str, reset=True):
+    def launch(self, stdout: str, stderr: str, reset=True):
         """
-        Launch PBS MoM
+        Launch SGE Execd
         """
         if reset:
-            self.cmd("echo >", logfile)
             self.cmd("echo >", stdout)
             self.cmd("echo >", stderr)
 
         self.cmdPrint(
-            self.PBSMoMExec,
-            "-d",
-            self.PBSHome,
-            "-c",
-            ConfPath,
-            "-L",
-            logfile,
+            "/bin/bash",
+            SGEStartScript,
             ">",
             stdout,
             "2>",
@@ -339,11 +329,6 @@ class SingleSwitchTopo(Topo):
             self.addLink(
                 host,
                 switch,
-                # bw=100,
-                # delay="1ms",
-                # loss=0,
-                # max_queue_size=1000,
-                # use_htb=True,
             )
 
 
@@ -383,7 +368,7 @@ class MultiSwitchTopo(Topo):
 
 
 def writeHostfile(entry: list[tuple[str, str]] = [], clean=False):
-    """Generate hostfile for PBS"""
+    """Generate hostfile for SGE"""
     smark = "# BEGIN Mininet hosts #\n"
     emark = "# END Mininet hosts #\n"
 
@@ -416,47 +401,59 @@ def writeRoute(entry: list[tuple[str, str]], clean=False):
     """
     for dest, nexthop in entry:
         # Clean existing routes
-        ret = os.popen(f"ip route del {dest}").read()
-        if len(ret) and "No such process" not in ret:
-            print(ret)
+        cmd = ["ip", "route", "del", dest]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0 and ("No such process" not in process.stderr):
+            print(f"Error: {process.stdout} {process.stderr} ")
+
         if clean:
             continue
 
         # Write new routes
-        ret = os.popen(f"ip route add {dest} via {nexthop}").read()
-        if len(ret):
-            print(ret)
+        cmd = ["ip", "route", "add", dest, "via", nexthop]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0:
+            print(f"Error: {process.stdout} {process.stderr} ")
 
-
-def writeNodeList(entry: list[tuple[str, str]], clean=False):
-    for hostname, _ in entry:
-        cmd = f"qmgr -c '{'delete' if clean else 'create'} node {hostname}'"
-        ret = os.popen(cmd).read()
-        if len(ret):
-            print(ret)
 
 def reset(head: bool):
-    # Reset hosts, routes and node list in PBS Server
+    # Reset hosts, routes
     writeHostfile(clean=True)
     writeRoute(Cluster.getRouteEntry(), clean=True)
-    writeNodeList(Cluster.getHostEntry(), clean=True)
 
-    if head: 
-        ans = input("Are you sure to clean DATABASE of PBS Server? [y/n] ")
-        if ans:
-            # reset head node
-            cmd = ["/bin/bash", PBSCleanScript, "master"]
+    if head:
+        # reset head node
+        cmd = ["/bin/bash", SGECleanScript, "master"]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0:
+            print(f"Error: {process.stdout} {process.stderr} ")
+    else:
+        # Reset mininet and kill all execd
+        cleanup()
+        os.system(r"pkill -SIGKILL -e -f 'sge_execd'")
+        # TODO: Add cgroup cleaning if needed
+
+        # reset execd and pull conf from master
+        cmd = ["/bin/bash", SGECleanScript, "exec", Cluster.head]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0:
+            print(f"Error: {process.stdout} {process.stderr} ")
+
+
+def setQMasterConf(entry: list[tuple[str, str]], pre=True, post=False):
+    """
+    Set host configuration on SGE Qmaster
+    This function should only be called with "--head".
+    """
+    for hostname, _ in entry:
+        if pre:
+            # Add administrative host
+            cmd = [f"{SGEBin}/qconf", "-ah", hostname]
             process = subprocess.run(cmd, text=True, capture_output=True)
             if process.returncode != 0:
                 print(f"Error: {process.stdout} {process.stderr} ")
-        else:
-            print("Skip cleaning database.")
-            return
-    else:
-        # Reset mininet and kill all pbs_mom
-        cleanup()
-        os.system(r"pkill -SIGKILL -e -f 'pbs_mom'")
-        # TODO: Add cgroup cleaning if needed
+        if post:
+            pass
 
 
 def setMaxLimit():
@@ -500,7 +497,7 @@ def Run(config: NodeConfig):
     net = Mininet(
         ipBase=str(config.subnet),
         topo=topo,
-        host=PBSMoMHost,  # customized host
+        host=SGEExecdHost,  # customized host
         link=TCLink,
     )
     net.addController("c1")
@@ -514,7 +511,7 @@ def Run(config: NodeConfig):
 
     net.start()
 
-    print("Testing connectivity")
+    print("Testing connectivity...")
     if (
         net.pingAll()
         if config.num < 5
@@ -524,28 +521,30 @@ def Run(config: NodeConfig):
         return
 
     print(
-        "Starting pbs_mom..." + ("Dryrun=True, won't start pbs_mom" if Dryrun else "")
+        "Starting sge_execd..."
+        + ("Dryrun=True, won't start sge_execd" if Dryrun else "")
     )
     for h in net.hosts:
         # Ignore NATs
-        if not isinstance(h, PBSMoMHost):
+        if not isinstance(h, SGEExecdHost):
             continue
 
-        pbslog = LogPath.format(h.name)
+        # sgelog = LogPath.format(h.name)
         outfile = StdoutPath.format(h.name)
         errfile = StderrPath.format(h.name)
 
         if not Dryrun:
-            h.launch(pbslog, outfile, errfile)
-            # sleep(0.1)
+            h.launch(outfile, errfile)
+            sleep(0.2)
 
     # Open CLI for debugging
+
     CLI(net)
     net.stop()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="PBS MoM in Mininet")
+    parser = argparse.ArgumentParser(description="SGE in Mininet")
     parser.add_argument(
         "-c",
         "--conf",
@@ -558,7 +557,6 @@ if __name__ == "__main__":
         "--offset", type=int, help="naming offset of virtual hosts, default=1"
     )
     parser.add_argument("--subnet", type=str, help="subnet for virtual hosts")
-    parser.add_argument("--pbs-conf", type=str, help="`mom_priv/config` for PBS")
     parser.add_argument(
         "--addr", type=str, help="primary IP (CIDR) of this node used in the cluster"
     )
@@ -566,25 +564,31 @@ if __name__ == "__main__":
         "--head", action="store_true", help="generate hosts and routes only"
     )
     parser.add_argument(
-        "--dryrun", action="store_true", help="prepare the env but not start PBS MoM"
+        "--dryrun", action="store_true", help="prepare the env but not start SGE"
     )
     parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     # Always from CLI
     args = parser.parse_args()
-    ConfPath = os.path.abspath(args.pbs_conf if args.pbs_conf else "/var/spool/pbs/mom_priv/config")
     Dryrun = args.dryrun if args.dryrun else False
 
     # Build ClusterConfig
     Cluster = ClusterConfig(args)
-    
+
+    # Require confirmation
+    if not args.head:
+        ans = input("Have you run this on the head node? [y/n] ")
+        if ans.strip() != "y":
+            print("You must run `--head` at head node at first.")
+            os.abort()
+
     # Clean the mininet and existing processes
-    reset(args.head)
+    reset(head=args.head)
     print("Old configuration is cleaned.")
     if args.clean:
-        print("Cleaned. --clean is true")
+        print("`--clean` is true, exiting...")
         exit(0)
-    
+
     # Set kernel options and mininet logging
     if not args.head:
         setLogLevel("info")
@@ -595,10 +599,10 @@ if __name__ == "__main__":
     if len(Cluster.nodes) > 1:
         writeRoute(Cluster.getRouteEntry())
 
-    # Only generate files for head node, do not run Mininet
+    # Only add conf for head node, do not run Mininet
     if args.head:
-        writeNodeList(Cluster.getHostEntry())
-        print("Hosts added to PBS Server.")
+        setQMasterConf(Cluster.getHostEntry())
+        print("QMaster configuration is added.")
     else:
         Run(Cluster.this)
         print("Done.")
