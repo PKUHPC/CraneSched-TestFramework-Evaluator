@@ -1,27 +1,75 @@
 head: cranectl
 cluster:
-  crane01:
-    NodeAddr: 192.168.2.10/24
-    HostNum: 64
+  l11c58n2:
+    NodeAddr: 192.168.202.230/24
+    HostNum: 1000
     Offset: 1
     Subnet: 10.10.0.0/16
     SwitchNum: 1
-  crane02:
-    NodeAddr: 192.168.2.11/24
-    HostNum: 64
-    Offset: 65
+  l11c58n3:
+    NodeAddr: 192.168.202.231/24
+    HostNum: 1000
+    Offset: 1001
     Subnet: 10.11.0.0/16
     SwitchNum: 1
-  crane03:
-    NodeAddr: 192.168.2.12/24
-    HostNum: 64
-    Offset: 129
+  l11c58n4:
+    NodeAddr: 192.168.202.232/24
+    HostNum: 1000
+    Offset: 2001
     Subnet: 10.12.0.0/16
     SwitchNum: 1
-  # cranectl:
-  #   NodeAddr: 192.168.2.13/24
-  #   HostNum: 20
-  #   Offset: 1
-  #   Subnet: 10.13.0.0/16
-  #   SwitchNum: 1
-  
+  l11c59n1:
+    NodeAddr: 192.168.202.233/24
+    HostNum: 1000
+    Offset: 3001
+    Subnet: 10.13.0.0/16
+    SwitchNum: 1
+  l11c59n2:
+    NodeAddr: 192.168.202.234/24
+    HostNum: 1000
+    Offset: 4001
+    Subnet: 10.14.0.0/16
+    SwitchNum: 1
+  l11c59n3:
+    NodeAddr: 192.168.202.235/24
+    HostNum: 1000
+    Offset: 5001
+    Subnet: 10.15.0.0/16
+    SwitchNum: 1
+  l11c59n4:
+    NodeAddr: 192.168.202.236/24
+    HostNum: 1000
+    Offset: 6001
+    Subnet: 10.16.0.0/16
+    SwitchNum: 1
+  l11c60n1:
+    NodeAddr: 192.168.202.237/24
+    HostNum: 1000
+    Offset: 7001
+    Subnet: 10.17.0.0/16
+    SwitchNum: 1
+  l11c60n2:
+    NodeAddr: 192.168.202.238/24
+    HostNum: 1000
+    Offset: 8001
+    Subnet: 10.18.0.0/16
+    SwitchNum: 1
+  l11c60n3:
+    NodeAddr: 192.168.202.239/24
+    HostNum: 1000
+    Offset: 9001
+    Subnet: 10.19.0.0/16
+    SwitchNum: 1
+  l11c60n4:
+    NodeAddr: 192.168.202.240/24
+    HostNum: 1000
+    Offset: 10001
+    Subnet: 10.20.0.0/16
+    SwitchNum: 1
+      # cranectl:
+      #   NodeAddr: 192.168.2.13/24
+      #   HostNum: 20
+      #   Offset: 1
+      #   Subnet: 10.13.0.0/16
+      #   SwitchNum: 1
+

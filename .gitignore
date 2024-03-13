@@ -5,6 +5,7 @@
 mininet/
 openflow/
 CraneSched/
+openpbs-master/
 
 # Utilities
 sync.sh

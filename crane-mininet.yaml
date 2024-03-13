@@ -1,5 +1,5 @@
 # the hostname of node which is running cranectld
-ControlMachine: 192.168.2.13
+ControlMachine: l11c58n1
 # the name of this cluster
 ClusterName: cranetest
 # the ip address of control machine
@@ -49,13 +49,13 @@ PriorityWeightQ0S: 1000000
 
 # list of configuration information of the computing machine
 Nodes:
-  - name: "craned[1-192]"
+  - name: "craned[1-11000]"
     cpu: 4
-    memory: 166G
+    memory: 250G
 
 # partition information list
 Partitions:
   - name: computing
-    nodes: "craned[1-192]"
+    nodes: "craned[1-11000]"
 
 DefaultPartition: computing
