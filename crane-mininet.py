@@ -12,6 +12,7 @@ import yaml
 import select
 import argparse
 import resource
+import subprocess
 import ipaddress as ipa
 from mininet.topo import Topo
 from mininet.net import Mininet
@@ -26,8 +27,9 @@ HostPath = "/etc/hosts"
 LogPath = "/tmp/output/{}.log"
 StdoutPath = "/tmp/output/{}.out"
 StderrPath = "/tmp/output/{}.err"
-HostName = "craned{}"
+HostName = "crnd{}"
 
+CraneCtldCleanScript = "utils/clean_crane.sh"
 
 class NodeConfig:
     """Node configuration"""
@@ -59,12 +61,20 @@ class ClusterConfig:
     """Cluster configuration"""
 
     def __init__(self, args) -> None:
+        self.head = ""
         self.nodes = {}
         self.this = NodeConfig("")
+
+        # store hostname
         thisname = os.popen("hostname").read().strip()
         try:
             with open(args.conf.strip(), "r") as file:
                 config = yaml.safe_load(file)  # type: dict
+
+            # head node
+            self.head = config["head"]
+
+            # each node in cluster
             for name, params in config["cluster"].items():
                 # Parse config into NodeConfig
                 if name == thisname:
@@ -77,10 +87,12 @@ class ClusterConfig:
                     node.subnet = ipa.IPv4Network(params["Subnet"])
                     node.addr = ipa.IPv4Interface(params["NodeAddr"])
                 self.nodes[name] = node
+
+            # If config not found and is not head, set it to defaults
             if len(self.this.name) == 0 and not args.head:
-                # If config not found and is not head, set it to defaults
                 print(f"Cannot find config for `{thisname}`, use defaults for it")
                 self.nodes[thisname] = self.setThisNode(thisname, {}, args)
+
         except FileNotFoundError or TypeError or KeyError or ValueError:
             print("Invalid config file, ignore and fall back to defaults")
             self.nodes = {thisname: self.setThisNode(thisname, {}, args)}
@@ -135,7 +147,7 @@ class CranedHost(Host):
 
     # TODO: Make these configurable
     # Craned executable
-    CranedExec = "CraneSched/cmake-build-debug/src/Craned/craned"
+    CranedExec = "CraneSched/cmake-build-release/src/Craned/craned"
     # (A, B) means contents in B will be persisted in A.
     PersistList = [("/tmp/output", "/tmp/output")]
     # Each host's temporary directory is invisible to others.
@@ -393,35 +405,47 @@ def writeRoute(entry: list[tuple[str, str]], clean=False):
     """
     for dest, nexthop in entry:
         # Clean existing routes
-        ret = os.popen(f"ip route del {dest}").read()
-        if len(ret) and "No such process" not in ret:
-            print(ret)
+        cmd = ["ip", "route", "del", dest]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0 and ("No such process" not in process.stderr):
+            print(f"Error: {process.stdout} {process.stderr} ")
+
         if clean:
             continue
 
         # Write new routes
-        ret = os.popen(f"ip route add {dest} via {nexthop}").read()
-        if len(ret):
-            print(ret)
+        cmd = ["ip", "route", "add", dest, "via", nexthop]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0:
+            print(f"Error: {process.stdout} {process.stderr} ")
 
 
-def reset():
-    cleanup()
-    # Kill all craned
-    os.system(r"pkill -SIGKILL -e -f '^craned\s'")
-    # Reset cgroup
-    os.system(
-        r'pushd /sys/fs/cgroup/cpu; for i in $(ls | grep Crane); do cgdelete "cpu:$i" ; done; popd'
-    )
-    os.system(
-        r'pushd /sys/fs/cgroup/memory; for i in $(ls | grep Crane); do cgdelete "memory:$i" ; done; popd'
-    )
+def reset(head : bool):
     # Reset hosts and routes
     writeHostfile(clean=True)
-    try:
-        writeRoute(Cluster.getRouteEntry(), clean=True)
-    except NameError:
-        pass
+    writeRoute(Cluster.getRouteEntry(), clean=True)
+
+    if head:
+        ans = input("Are you sure to clean DATABASE of CraneCtld? [y/n] ")
+        if ans:
+            # reset db on head node
+            cmd = ["/bin/bash", CraneCtldCleanScript, "5"]
+            process = subprocess.run(cmd, text=True, capture_output=True)
+            if process.returncode != 0:
+                print(f"Error: {process.stdout} {process.stderr} ")
+        else:
+            print("Skip cleaning database.")
+            return
+    else:
+        # Reset mininet, kill all craned and release cgroups
+        cleanup()
+        os.system(r"pkill -SIGKILL -e -f '^craned\s'")
+        os.system(
+            r'pushd /sys/fs/cgroup/cpu; for i in $(ls | grep Crane); do cgdelete "cpu:$i" ; done; popd'
+        )
+        os.system(
+            r'pushd /sys/fs/cgroup/memory; for i in $(ls | grep Crane); do cgdelete "memory:$i" ; done; popd'
+        )
 
 
 def setMaxLimit():
@@ -534,27 +558,35 @@ if __name__ == "__main__":
     parser.add_argument("--clean", action="store_true", help="clean the environment")
 
     args = parser.parse_args()
-
-    reset()
-    if args.clean:
-        exit()
-    setLogLevel("info")
-    setMaxLimit()
-
+    
     # Always from CLI
     ConfPath = os.path.abspath(
         args.crane_conf if args.crane_conf else "/etc/crane/config.yaml"
     )
     Dryrun = args.dryrun if args.dryrun else False
-
+    
     # Build ClusterConfig
     Cluster = ClusterConfig(args)
 
+    # Clean the mininet and existing processes
+    reset(head=args.head)
+    print("Old configuration is cleaned.")
+    if args.clean:
+        print("`--clean` is true, exiting...")
+        exit(0)
+
+    # Set kernel options and mininet logging
+    if not args.head:
+        setLogLevel("info")
+        setMaxLimit()
+
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())
-    if len(Cluster.nodes) > 1:
-        writeRoute(Cluster.getRouteEntry())
+    writeRoute(Cluster.getRouteEntry())
 
     # Only generate files for head node, do not run Mininet
     if not args.head:
         Run(Cluster.this)
+        print("Done.")
+    else:
+        print("Hosts and routes are added.")

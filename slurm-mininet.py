@@ -20,7 +20,7 @@ HostPath = "/etc/hosts"
 LogPath = "/tmp/output/{}.log"
 StdoutPath = "/tmp/output/{}.out"
 StderrPath = "/tmp/output/{}.err"
-HostName = "slurmd{}"
+HostName = "slrmd{}"
 
 # (A, B) means contents in B will be persisted in A.
 PersistList = [("/tmp/output", "/tmp/output")]

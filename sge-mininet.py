@@ -596,8 +596,7 @@ if __name__ == "__main__":
 
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())
-    if len(Cluster.nodes) > 1:
-        writeRoute(Cluster.getRouteEntry())
+    writeRoute(Cluster.getRouteEntry())
 
     # Only add conf for head node, do not run Mininet
     if args.head:

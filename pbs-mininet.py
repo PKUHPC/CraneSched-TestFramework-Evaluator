@@ -579,7 +579,7 @@ if __name__ == "__main__":
     Cluster = ClusterConfig(args)
     
     # Clean the mininet and existing processes
-    reset(args.head)
+    reset(head=args.head)
     print("Old configuration is cleaned.")
     if args.clean:
         print("Cleaned. --clean is true")
@@ -592,8 +592,7 @@ if __name__ == "__main__":
 
     # Generate hostfile and route
     writeHostfile(Cluster.getHostEntry())
-    if len(Cluster.nodes) > 1:
-        writeRoute(Cluster.getRouteEntry())
+    writeRoute(Cluster.getRouteEntry())
 
     # Only generate files for head node, do not run Mininet
     if args.head:
