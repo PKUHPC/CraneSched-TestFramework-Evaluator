@@ -7,6 +7,5 @@
 #CBATCH -p computing
 #CBATCH -o result/%j.out
 
-echo "start:$(date +%s.%N):$$"
-sleep 100
-echo "end:$(date +%s.%N)"
+echo "Hello World!"
+# sleep $((RANDOM % 10 + 1))

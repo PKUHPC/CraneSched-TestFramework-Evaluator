@@ -8,5 +8,5 @@
 #CBATCH -o result/%j.out
 
 echo "start:$(date +%s.%N):$$"
-sleep 3600
+sleep 1800
 echo "end:$(date +%s.%N)"

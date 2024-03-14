@@ -18,9 +18,10 @@ echo "Timestamp, %CPU, RSS(MB), Swap(KB)" | tee "$OUTPUT_FILE"
 
 # 开始监控进程
 while true; do
-  # 使用 ps 命令获取 %CPU 和 RSS
-  CPU_RSS=$(ps -p "$PID" -o %cpu,rss | tail -n +2 | awk -v OFS=, -v ORS='' '{print $1, $2/1024}')
-  
+  # 使用 ps 命令获取整个进程的 RSS 和 %CPU
+  CPU=$(ps -p "$PID" -o %cpu --no-headers | awk '{cpu+=$1} END {print cpu}')
+  RSS=$(ps -p "$PID" -o rss --no-headers | awk '{rss+=$1} END {print rss/1024}')
+
   # 获取 Swap 使用量
   SWAP=$(awk '/VmSwap/ {print $2}' /proc/"$PID"/status)
 
@@ -28,8 +29,7 @@ while true; do
   SWAP=${SWAP:-0}
 
   # 组合输出信息，包括时间戳、CPU 使用率、RSS 和 Swap 使用量
-  echo "$(date '+%Y-%m-%d %H:%M:%S'),$CPU_RSS,$SWAP" | tee -a "$OUTPUT_FILE"
+  echo "$(date '+%Y-%m-%d %H:%M:%S'),$CPU,$RSS,$SWAP" | tee -a "$OUTPUT_FILE"
   
   sleep $INTERVAL
 done
-
