@@ -27,4 +27,8 @@ else
     echo "Failed to delete files in /var/spool/slurmctld."
 fi
 
+# Start slurmctld and slurmdbd services
+systemctl start slurmdbd && echo "slurmdbd service started." || echo "Failed to start slurmdbd service."
+systemctl start slurmctld && echo "slurmctld service started." || echo "Failed to start slurmctld service."
+
 echo "Done."

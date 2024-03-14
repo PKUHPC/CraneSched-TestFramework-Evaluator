@@ -443,7 +443,7 @@ def reset(head: bool):
 
     if head: 
         ans = input("Are you sure to clean DATABASE of PBS Server? [y/n] ")
-        if ans:
+        if ans.strip() == "y":
             # reset head node
             cmd = ["/bin/bash", PBSCleanScript, "master"]
             process = subprocess.run(cmd, text=True, capture_output=True)

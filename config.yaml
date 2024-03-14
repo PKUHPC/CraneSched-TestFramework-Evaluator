@@ -1,4 +1,4 @@
-head: cranectl
+head: l11c58n1
 cluster:
   l11c58n2:
     NodeAddr: 192.168.202.230/24

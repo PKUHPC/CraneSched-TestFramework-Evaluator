@@ -427,7 +427,7 @@ def reset(head : bool):
 
     if head:
         ans = input("Are you sure to clean DATABASE of CraneCtld? [y/n] ")
-        if ans:
+        if ans.strip() == "y":
             # reset db on head node
             cmd = ["/bin/bash", CraneCtldCleanScript, "5"]
             process = subprocess.run(cmd, text=True, capture_output=True)
@@ -466,7 +466,8 @@ def setMaxLimit():
     kernelParams = {
         "kernel.pid_max": "4194304",
         "kernel.threads-max": "8388608",
-        "net.core.somaxconn": "8192",
+        "net.core.somaxconn": "16384",
+        "net.ipv4.tcp_max_syn_backlog": "16384",
         "vm.max_map_count": "1677720",
         "net.ipv6.conf.default.disable_ipv6": "1",
         "net.ipv6.conf.all.disable_ipv6": "1",
@@ -524,7 +525,6 @@ def Run(config: NodeConfig):
 
         if not Dryrun:
             h.launch(cranedlog, outfile, errfile)
-            # sleep(0.1)
 
     # Open CLI for debugging
     CLI(net)
