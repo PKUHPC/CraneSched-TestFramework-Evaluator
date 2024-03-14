@@ -1,0 +1,11 @@
+#!/bin/bash
+#CBATCH --ntasks-per-node 1
+#CBATCH --nodes 1
+#CBATCH -c 1
+#CBATCH --mem 5M
+#CBATCH -J CraneTest
+#CBATCH -p computing
+#CBATCH -o result/%j.out
+
+sleep 100
+echo "Hello World!"

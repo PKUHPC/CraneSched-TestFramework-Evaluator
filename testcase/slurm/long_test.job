@@ -1,0 +1,12 @@
+#!/bin/bash
+#SBATCH --ntasks-per-node 1
+#SBATCH --nodes 1
+#SBATCH -c 1
+#SBATCH --mem 5M
+#SBATCH -J LongTest
+#SBATCH -p compute
+#SBATCH -o result/%j.out
+
+echo "start:$(date +%s.%N):$$"
+sleep 1800
+echo "end:$(date +%s.%N)" 

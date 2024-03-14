@@ -12,14 +12,14 @@ fi
 PAYLOADNUM=$1
 
 if [ $PAYLOADNUM -gt 0 ]; then
-    cbatch --repeat $PAYLOADNUM long_test.job &> /dev/null || { echo "Error submiting payload, quitting"; exit 1; }
+    sbatch --array=1-$PAYLOADNUM long_test.job &> /dev/null || { echo "Error submiting payload, quitting"; exit 1; }
     sleep 3
 else
     echo "Payload number less than 1, skipping submission"
 fi
 
 # Define commands to test
-commands=("cinfo" "cqueue -m 1000" "cacct -m 1000" "ccontrol show node" "cacctmgr show account")
+commands=("sinfo" "squeue -m 1000" "sacct -m 1000" "scontrol show node" "sacctmgr show account")
 for cmd in "${commands[@]}"
 do
     echo "Testing execution time for command: $cmd"
@@ -27,17 +27,17 @@ do
     echo "----------------------------------------"
 done
 
-# Test cbatch/ccancel by submitting/cancelling a sample job
-echo "Testing execution time for command: cbatch"
-{ time cbatch_output=$(cbatch test.job); } 2>&1 1>/dev/null
+# Test sbatch/scancel by submitting/cancelling a sample job
+echo "Testing execution time for command: scancel"
+{ time sbatch_output=$(sbatch test.job); } 2>&1 1>/dev/null
 
-task_id=$(echo $cbatch_output | grep -oP '(?<=Task Id allocated: )\d+')
+task_id=$(echo $sbatch_output | grep -oP '(?<=Task Id allocated: )\d+')
 
 echo "Job ID is $task_id"
 echo "----------------------------------------"
 
-echo "Testing execution time for command: ccancel"
-{ time ccancel $task_id; } 2>&1 1>/dev/null
+echo "Testing execution time for command: scancel"
+{ time scancel $task_id; } 2>&1 1>/dev/null
 echo "----------------------------------------"
 
 echo "All tests completed."

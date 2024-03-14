@@ -19,3 +19,4 @@ sync_*
 
 # Result dir
 testcase/*/result/*
+*-stat

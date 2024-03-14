@@ -477,7 +477,8 @@ def setMaxLimit():
     kernelParams = {
         "kernel.pid_max": "4194304",
         "kernel.threads-max": "8388608",
-        "net.core.somaxconn": "8192",
+        "net.core.somaxconn": "16384",
+        "net.ipv4.tcp_max_syn_backlog": "16384",
         "vm.max_map_count": "1677720",
         "net.ipv6.conf.default.disable_ipv6": "1",
         "net.ipv6.conf.all.disable_ipv6": "1",
