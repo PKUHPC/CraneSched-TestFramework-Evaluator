@@ -4,9 +4,6 @@
 #$ -j y                # 将标准错误合并到标准输出
 #$ -N SGE_Test         # 作业名称
 #$ -pe smp 1
-#$ -l h_vmem=10M
+#$ -l h_vmem=100M
 
-echo "start:$(date +%s.%N):$$"
-sleep 100
-echo "end:$(date +%s.%N)"
-
+echo "Hello World!"

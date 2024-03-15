@@ -7,8 +7,8 @@ echo "Start time: $(date)"
 # 1000 * 10000 = 10,000,000 job
 
 for i in {1..1000}; do
-    # Submit the Crane job in the background
-    echo "[#$i]" && cbatch --repeat=10000 test.job &
+    # Submit the Slurm job in the background
+    echo "[#$i]" && qsub -J 1-10000 test.job &
 
     sleep 1
 done
