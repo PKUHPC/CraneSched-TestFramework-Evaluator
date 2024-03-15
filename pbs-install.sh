@@ -6,7 +6,7 @@ set -eo pipefail
 
 # Set to 1 to treat the current node as the head node
 HEAD=0
-HEADSERVER="l11c58n1"
+HEADSERVER="l11c58n2"
 if [ $HEAD -eq 1 ]; then
     HEADSERVER=$(hostname)
 fi

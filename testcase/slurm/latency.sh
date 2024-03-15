@@ -13,7 +13,7 @@ PAYLOADNUM=$1
 
 if [ $PAYLOADNUM -gt 0 ]; then
     sbatch --array=1-$PAYLOADNUM long_test.job &> /dev/null || { echo "Error submiting payload, quitting"; exit 1; }
-    sleep 3
+    sleep 10
 else
     echo "Payload number less than 1, skipping submission"
 fi

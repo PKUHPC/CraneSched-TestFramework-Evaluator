@@ -7,13 +7,14 @@ openflow/
 CraneSched/
 CraneSched-FrontEnd/
 openpbs-master/
+sge/
 
 # Utilities
 sync.sh
 sync_*
 *.txt
 
-# Slurm output
+# Output
 *.out
 *.log
 

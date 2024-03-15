@@ -1,5 +1,5 @@
 # the hostname of node which is running cranectld
-ControlMachine: l11c58n1
+ControlMachine: l11c58n2
 # the name of this cluster
 ClusterName: cranetest
 # the ip address of control machine
@@ -19,13 +19,13 @@ DbConfigPath: /etc/crane/database.yaml
 # Craned Options
 
 # debug level of cranectld
-CraneCtldDebugLevel: trace
+CraneCtldDebugLevel: info
 # file path of cranectld log file
 CraneCtldLogFile: /tmp/cranectld/cranectld.log
 # Determines whether the cranectld is running in the background
 CraneCtldForeground: true
 # debug level of craned
-CranedDebugLevel: trace
+CranedDebugLevel: info
 # file path of craned log file
 # CranedLogFile: /tmp/craned/craned.log
 # Determines whether the craned is running in the background
@@ -49,13 +49,13 @@ PriorityWeightQ0S: 1000000
 
 # list of configuration information of the computing machine
 Nodes:
-  - name: "crnd[1-11000]"
+  - name: "crnd[1-20000]"
     cpu: 4
     memory: 250G
 
 # partition information list
 Partitions:
   - name: computing
-    nodes: "crnd[1-11000]"
+    nodes: "crnd[1-20000]"
 
 DefaultPartition: computing
