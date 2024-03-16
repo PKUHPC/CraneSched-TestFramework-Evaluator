@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Script for testing the latency of Crane commands
-# This should be run under testcase/crane directory
+# Script for testing the latency of Slurm commands
+# This should be run under testcase/slurm directory
 
 # Submit payload
 if [ $# -ne 1 ]; then
@@ -19,7 +19,7 @@ else
 fi
 
 # Define commands to test
-commands=("sinfo" "squeue -m 1000" "sacct -m 1000" "scontrol show node" "sacctmgr show account")
+commands=("sinfo" "squeue" "sacct" "scontrol show node" "sacctmgr show account")
 for cmd in "${commands[@]}"
 do
     echo "Testing execution time for command: $cmd"

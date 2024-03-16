@@ -49,13 +49,13 @@ PriorityWeightQ0S: 1000000
 
 # list of configuration information of the computing machine
 Nodes:
-  - name: "crnd[1-20000]"
+  - name: "crnd[1-10000]"
     cpu: 4
     memory: 250G
 
 # partition information list
 Partitions:
   - name: computing
-    nodes: "crnd[1-20000]"
+    nodes: "crnd[1-10000]"
 
 DefaultPartition: computing

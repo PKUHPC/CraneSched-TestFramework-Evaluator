@@ -416,16 +416,19 @@ def writeRoute(entry: list[tuple[str, str]], clean=False):
     """
     for dest, nexthop in entry:
         # Clean existing routes
-        ret = os.popen(f"ip route del {dest}").read()
-        if len(ret) and "No such process" not in ret:
-            print(ret)
+        cmd = ["ip", "route", "del", dest]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0 and ("No such process" not in process.stderr):
+            print(f"Error: {process.stdout} {process.stderr} ")
+
         if clean:
             continue
 
         # Write new routes
-        ret = os.popen(f"ip route add {dest} via {nexthop}").read()
-        if len(ret):
-            print(ret)
+        cmd = ["ip", "route", "add", dest, "via", nexthop]
+        process = subprocess.run(cmd, text=True, capture_output=True)
+        if process.returncode != 0:
+            print(f"Error: {process.stdout} {process.stderr} ")
 
 
 def writeNodeList(entry: list[tuple[str, str]], clean=False):
@@ -435,13 +438,23 @@ def writeNodeList(entry: list[tuple[str, str]], clean=False):
         if len(ret):
             print(ret)
 
+        if not clean:
+            cmd = f"qmgr -c 'set node {hostname} resources_available.ncpus=4'"
+            ret = os.popen(cmd).read()
+            if len(ret):
+                print(ret)
+
 def reset(head: bool):
     # Reset hosts, routes and node list in PBS Server
     writeHostfile(clean=True)
     writeRoute(Cluster.getRouteEntry(), clean=True)
-    writeNodeList(Cluster.getHostEntry(), clean=True)
 
     if head: 
+        ans = input("Are you sure to clean NODE LIST of PBS Server? [y/n] ")
+        if ans.strip() == "y":
+            writeNodeList(Cluster.getHostEntry(), clean=True)
+        else: 
+            print("Skip cleaning node list.")
         ans = input("Are you sure to clean DATABASE of PBS Server? [y/n] ")
         if ans.strip() == "y":
             # reset head node
@@ -451,7 +464,6 @@ def reset(head: bool):
                 print(f"Error: {process.stdout} {process.stderr} ")
         else:
             print("Skip cleaning database.")
-            return
     else:
         # Reset mininet and kill all pbs_mom
         cleanup()

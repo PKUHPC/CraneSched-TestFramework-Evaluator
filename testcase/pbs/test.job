@@ -1,7 +1,6 @@
 #!/bin/bash
 #PBS -l select=1:ncpus=1:mem=5mb
-#PBS -o result/
-#PBS -j oe
+#PBS -k oe
 #PBS -q workq
 #PBS -N PBSTEST
 
