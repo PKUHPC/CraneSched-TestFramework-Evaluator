@@ -17,6 +17,7 @@ pushd $SGE_ROOT
 chown -R sge:sge $SGE_ROOT/$SGE_CELL
 source "$SGE_ROOT/$SGE_CELL/common/settings.sh" || { echo "Failed to source settings.sh"; popd; exit 1; }
 
+sleep $((RANDOM % 10 + 1))
 qconf -sh &> /dev/null || { echo "qconf failed, check if host added in master."; exit 1; }
 yes "" | ./install_execd || { echo "Warning: something went wrong in installing execd"; }
 

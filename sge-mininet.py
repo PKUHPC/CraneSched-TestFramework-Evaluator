@@ -423,10 +423,14 @@ def reset(head: bool):
 
     if head:
         # reset head node
-        cmd = ["/bin/bash", SGECleanScript, "master"]
-        process = subprocess.run(cmd, text=True, capture_output=True)
-        if process.returncode != 0:
-            print(f"Error: {process.stdout} {process.stderr} ")
+        ans = input("Do you want to erase QMaster configuration? [y/n] ")
+        if ans.strip() == 'y':
+            cmd = ["/bin/bash", SGECleanScript, "master"]
+            process = subprocess.run(cmd, text=True, capture_output=True)
+            if process.returncode != 0:
+                print(f"Error: {process.stdout} {process.stderr} ")
+        else: 
+            print("Skip cleaning QMaster.") 
     else:
         # Reset mininet and kill all execd
         cleanup()
