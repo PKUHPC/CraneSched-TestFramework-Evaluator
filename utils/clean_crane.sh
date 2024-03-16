@@ -16,6 +16,7 @@ username=${username//\"/}
 password=$(grep 'DbPassword' "$confFile" | awk '{print $2}')
 password=${password//\"/}
 embedded_db_path=$(grep 'CraneCtldDbPath' "$confFile" | awk '{print $2}')
+embedded_db_path="$embedded_db_path*"
 parent_dir="${embedded_db_path%/*}"
 env_path="${parent_dir}/CraneEnv"
 
@@ -42,9 +43,9 @@ fi
 if [ "$mode" -eq 3 ] || [ "$mode" -eq 5 ]; then
     wipe_collection task_table
 
-    if [ -e "$embedded_db_path" ]; then
-        echo "Removing file $embedded_db_path ..."
-        rm "$embedded_db_path"
+    if [ -e $parent_dir ]; then
+        echo "Removing $embedded_db_path ..."
+        rm $embedded_db_path
     fi
     if [ -e "$env_path" ]; then
         echo "Removing env folder $env_path ..."

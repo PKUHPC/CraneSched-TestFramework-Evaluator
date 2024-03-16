@@ -92,9 +92,9 @@ fi
 
 pushd CraneSched
 git fetch && git pull
-# git checkout bugfix/use_after_free || {
-#     echo "Error checking out branch bugfix/use_after_free" && exit 1
-# }
+git checkout dev/split_embeddedDb || {
+    echo "Error checking out branch dev/split_embeddedDb" && exit 1
+}
 unsetp
 
 BUILD_DIR=cmake-build-release
