@@ -1,0 +1,12 @@
+#!/bin/bash
+#CBATCH --ntasks-per-node 1
+#CBATCH --nodes 10
+#CBATCH -c 1
+#CBATCH --mem 5M
+#CBATCH -J CraneTest
+#CBATCH -p computing
+#CBATCH -o result/%j.out
+
+sleep 10
+echo "Hello World!"
+# sleep $((RANDOM % 10 + 1))
