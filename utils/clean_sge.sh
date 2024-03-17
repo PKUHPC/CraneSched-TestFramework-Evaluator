@@ -67,4 +67,4 @@ case $INSTALL_MODE in
         ;;
 esac
 
-echo "SGE configuration re-initiated."
+echo "SGE configuration reinstalled."
