@@ -19,7 +19,7 @@ else
 fi
 
 # Define commands to test
-commands=("sinfo" "squeue" "sacct" "scontrol show node" "sacctmgr show account")
+commands=("sinfo" "squeue -r" "sacct" "scontrol show node" "sacctmgr show account")
 for cmd in "${commands[@]}"
 do
     echo "Testing execution time for command: $cmd"
@@ -28,10 +28,10 @@ do
 done
 
 # Test sbatch/scancel by submitting/cancelling a sample job
-echo "Testing execution time for command: scancel"
-{ time sbatch_output=$(sbatch test.job); } 2>&1 1>/dev/null
+echo "Testing execution time for command: sbatch"
+{ time sbatch_output=$(sbatch long_test.job); } 2>&1 1>/dev/null
 
-task_id=$(echo $sbatch_output | grep -oP '(?<=Task Id allocated: )\d+')
+task_id=$(echo $sbatch_output | grep -oP '(?<=Submitted batch job )\d+')
 
 echo "Job ID is $task_id"
 echo "----------------------------------------"

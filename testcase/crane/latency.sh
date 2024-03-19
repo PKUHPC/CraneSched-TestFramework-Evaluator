@@ -29,7 +29,7 @@ done
 
 # Test cbatch/ccancel by submitting/cancelling a sample job
 echo "Testing execution time for command: cbatch"
-{ time cbatch_output=$(cbatch test.job); } 2>&1 1>/dev/null
+{ time cbatch_output=$(cbatch long_test.job); } 2>&1 1>/dev/null
 
 task_id=$(echo $cbatch_output | grep -oP '(?<=Task Id allocated: )\d+')
 
