@@ -20,7 +20,7 @@ fi
 
 # Define commands to test 
 # No "cacctmgr show account" equivalent in PBS
-commands=("pbsnodes -aSj" "qstat" "qstat -H" "pbsnodes -a" )
+commands=("pbsnodes -aSj" "qstat -t 35[]" "qstat -tH" "pbsnodes -a" )
 for cmd in "${commands[@]}"
 do
     echo "Testing execution time for command: $cmd"
@@ -30,7 +30,7 @@ done
 
 # Test qsub/qdel by submitting/cancelling a sample job
 echo "Testing execution time for command: qsub"
-{ time qsub_output=$(qsub test.job); } 2>&1 1>/dev/null
+{ time qsub_output=$(qsub long_test.job); } 2>&1 1>/dev/null
 
 # Extract the job ID (assuming PBS outputs the job ID in a standard format like 123.server)
 task_id=$(echo "$qsub_output" | grep -oP '^\d+')

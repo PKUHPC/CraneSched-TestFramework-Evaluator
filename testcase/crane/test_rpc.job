@@ -1,7 +1,7 @@
 #!/bin/bash
 #CBATCH --ntasks-per-node 1
-#CBATCH --nodes 10
-#CBATCH -c 1
+#CBATCH --nodes 4
+#CBATCH -c 0.1
 #CBATCH --mem 5M
 #CBATCH -J CraneTest
 #CBATCH -p computing

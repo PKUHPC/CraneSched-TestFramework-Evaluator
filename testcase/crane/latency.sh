@@ -19,7 +19,7 @@ else
 fi
 
 # Define commands to test
-commands=("cinfo" "cqueue -m 100000" "cacct -m 100000" "ccontrol show node" "cacctmgr show account")
+commands=("cinfo" "cqueue -m 10000" "cacct -m 10000" "ccontrol show node" "cacctmgr show account")
 for cmd in "${commands[@]}"
 do
     echo "Testing execution time for command: $cmd"
