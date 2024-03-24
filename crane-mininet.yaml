@@ -15,6 +15,7 @@ CaCertFilePath: /etc/crane/ca.crt
 DomainSuffix: riley.local
 
 DbConfigPath: /etc/crane/database.yaml
+PredConfigPath: /etc/crane/predictor.yaml
 
 # Craned Options
 
