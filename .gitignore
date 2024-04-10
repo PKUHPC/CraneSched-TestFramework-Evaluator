@@ -10,7 +10,7 @@ openpbs-master/
 sge/
 
 # Model
-model.txt
+predictor/model.txt
 
 # Output
 *.out

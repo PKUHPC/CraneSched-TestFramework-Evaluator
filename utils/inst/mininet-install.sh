@@ -4,8 +4,6 @@
 # export http_proxy=http://xcat:17890
 # export https_proxy=http://xcat:17890
 
-dnf install -y git
-
 if [ ! -d "mininet" ]; then
     git clone https://github.com/mininet/mininet.git || {
         echo "Error cloning Mininet" && exit 1
