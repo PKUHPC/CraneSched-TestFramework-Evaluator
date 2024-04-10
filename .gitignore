@@ -9,10 +9,8 @@ CraneSched-FrontEnd/
 openpbs-master/
 sge/
 
-# Utilities
-sync.sh
-sync_*
-*.txt
+# Model
+model.txt
 
 # Output
 *.out

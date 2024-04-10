@@ -1,0 +1,26 @@
+# 使用 # 开始的行为注释
+# 每行定义一个同步规则，格式为：
+# 源路径:目标节点:目标路径
+# 如果源路径以 - 开头，则表示该路径为排除项
+
+# 示例
+# 排除 folder2
+-.git/
+-.vscode/
+-.gitignore/
+-mininet/
+-openflow/
+-CraneSched/
+-CraneSched-FrontEnd/
+-openpbs-master/
+-sge/
+-testcase/*/result/*
+-*-stat-*
+-*.log
+-*.out
+-*.cmd
+-*.tar
+-*.gz
+
+# 同步当前目录到所有节点
+../TestFrame::/root/
