@@ -151,7 +151,7 @@ class CranedHost(Host):
     # (A, B) means contents in B will be persisted in A.
     PersistList = [("/tmp/output", "/tmp/output")]
     # Each host's temporary directory is invisible to others.
-    TempList = ["/tmp/crane", "/tmp/craned"]
+    TempList = ["/tmp/crane"] # "CraneBaseDir" in Crane's config.yaml 
 
     def __init__(self, name, **params):
         """
