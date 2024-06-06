@@ -1,0 +1,36 @@
+diff --git a/util/install.sh b/util/install.sh
+index bf4492d..c609327 100755
+--- a/util/install.sh
++++ b/util/install.sh
+@@ -83,6 +83,9 @@ KERNEL_HEADERS=kernel-headers-${KERNEL_NAME}
+ # Treat Raspbian as Debian
+ [ "$DIST" = 'Raspbian' ] && DIST='Debian'
+ 
++# Treat RockyLinux as RHEL
++[ "$DIST" = 'RockyLinux' ] && DIST='RedHatEnterpriseServer'
++
+ DISTS='Ubuntu|Debian|Fedora|RedHatEnterpriseServer|SUSE LINUX'
+ if ! echo $DIST | egrep "$DISTS" >/dev/null; then
+     echo "Install.sh currently only supports $DISTS."
+@@ -163,10 +166,9 @@ function mn_deps {
+     echo "Installing Mininet dependencies"
+     if [ "$DIST" = "Fedora" -o "$DIST" = "RedHatEnterpriseServer" ]; then
+         $install gcc make socat psmisc xterm openssh-clients iperf \
+-            iproute telnet python-setuptools libcgroup-tools \
++            iproute telnet python-setuptools \
+             ethtool help2man net-tools
+-        $install ${PYPKG}-pyflakes pylint ${PYPKG}-pep8-naming \
+-            ${PYPKG}-pexpect
++        $install ${PYPKG}-pyflakes pylint ${PYPKG}-pexpect
+     elif [ "$DIST" = "SUSE LINUX"  ]; then
+ 		$install gcc make socat psmisc xterm openssh iperf \
+ 			iproute telnet ${PYPKG}-setuptools libcgroup-tools \
+@@ -421,7 +423,7 @@ function ovs {
+     echo "Installing Open vSwitch..."
+ 
+     if [ "$DIST" = "Fedora" -o "$DIST" = "RedHatEnterpriseServer" ]; then
+-        $install openvswitch
++        $install openvswitch3.3
+         if ! $install openvswitch-controller; then
+             echo "openvswitch-controller not installed"
+         fi
