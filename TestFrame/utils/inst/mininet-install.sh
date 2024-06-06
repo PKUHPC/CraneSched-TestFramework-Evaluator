@@ -10,7 +10,7 @@ if [ ! -d "mininet" ]; then
     }
 fi
 
-dnf install -y help2man python-pip centos-release-nfv-openvswitch
+dnf install -y help2man python-pip centos-release-nfv-openvswitch lsb_release 
 
 sh mininet/util/install.sh -nfv
 systemctl start openvswitch
